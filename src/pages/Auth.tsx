@@ -106,12 +106,14 @@ const Auth = () => {
 
   // Google OAuth — vendor rolu searchParams-dan oxunur
   const handleGoogle = async () => {
+    // Encode vendor intent in the redirect URL hash — survives OAuth redirect
+    const redirectTo = isVendor
+      ? `${window.location.origin}/auth?google_vendor=1`
+      : `${window.location.origin}/auth`;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-        queryParams: isVendor ? { role: "vendor" } : undefined,
-      },
+      options: { redirectTo },
     });
     if (error) toast.error(error.message || "Google ilə giriş mümkün olmadı");
   };
