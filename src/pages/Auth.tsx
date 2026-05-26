@@ -44,6 +44,7 @@ const Auth = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
   const navigate = useNavigate();
 
   // Detect Supabase password reset session from URL hash
@@ -94,7 +95,7 @@ const Auth = () => {
           },
         });
         if (error) throw error;
-        toast.success("Qeydiyyat uğurlu oldu! E-poçtunuzu yoxlayın.");
+        setEmailSent(true);
       }
     } catch (error: unknown) {
       toast.error((error as Error).message || t("error"));
@@ -127,6 +128,53 @@ const Auth = () => {
     : mode === "register" ? t("authRegisterSub")
     : mode === "reset" ? "Yeni şifrənizi daxil edin"
     : t("authForgotSub");
+
+  // Email confirmation sent screen
+  if (emailSent) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center px-4"
+        style={{ background: "linear-gradient(160deg, hsl(28 40% 98%) 0%, hsl(22 35% 94%) 100%)" }}
+      >
+        <div className="w-full max-w-md text-center">
+          <div className="flex items-center justify-center gap-2 mb-8">
+            <Heart className="w-7 h-7 text-primary fill-primary" />
+            <span className="text-2xl font-serif font-bold">ToyQur<span className="text-primary">.az</span></span>
+          </div>
+          <div
+            className="rounded-2xl p-8"
+            style={{ background: "hsl(30 42% 99%)", border: "1px solid hsl(25 28% 88%)", boxShadow: "0 4px 24px hsl(20 18% 72%/0.15)" }}
+          >
+            {/* Mail icon */}
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
+              style={{ background: "hsl(16 38% 92%)" }}>
+              <Mail className="w-9 h-9" style={{ color: "hsl(16 38% 44%)" }} />
+            </div>
+            <h2 className="text-xl font-serif font-bold text-foreground mb-3">E-poçtunuzu yoxlayın</h2>
+            <p className="text-sm text-muted-foreground mb-2">
+              <span className="font-medium" style={{ color: "hsl(20 20% 18%)" }}>{email}</span> ünvanına təsdiq linki göndərildi.
+            </p>
+            <p className="text-xs text-muted-foreground mb-6">
+              Gələnlər qutunuzu (və spam qovluğunu) yoxlayın. Linki tıklayaraq hesabınızı aktivləşdirin.
+            </p>
+            <div
+              className="rounded-xl p-4 mb-6 text-left"
+              style={{ background: "hsl(28 35% 95%)", border: "1px solid hsl(25 26% 87%)" }}
+            >
+              <p className="text-xs font-medium text-foreground mb-1">Mail gəlmədi?</p>
+              <p className="text-xs text-muted-foreground">Bir neçə dəqiqə gözləyin. Spam/Junk qovluğunu yoxlayın. Düzgün email ünvanı daxil etdiyinizdən əmin olun.</p>
+            </div>
+            <button
+              onClick={() => { setEmailSent(false); setMode("login"); }}
+              className="text-sm text-primary hover:underline font-medium"
+            >
+              Daxil olmaq səhifəsinə qayıt
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
