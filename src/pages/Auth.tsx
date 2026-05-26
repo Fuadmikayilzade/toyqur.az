@@ -1,7 +1,7 @@
 import { useSEO } from "@/hooks/useSEO";
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Heart, Mail, Lock, User, Eye, EyeOff, Check, X as XIcon, Chrome } from "lucide-react";
+import { Heart, Mail, Lock, User, Eye, EyeOff, Check, X as XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -104,19 +104,6 @@ const Auth = () => {
     }
   };
 
-  // Google OAuth — vendor rolu searchParams-dan oxunur
-  const handleGoogle = async () => {
-    // Encode vendor intent in the redirect URL hash — survives OAuth redirect
-    const redirectTo = isVendor
-      ? `${window.location.origin}/auth?google_vendor=1`
-      : `${window.location.origin}/auth`;
-
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo },
-    });
-    if (error) toast.error(error.message || "Google ilə giriş mümkün olmadı");
-  };
 
   const inputCls = "w-full pl-10 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all";
   const inputStyle = { background: "hsl(28 38% 97%)", border: "1px solid hsl(25 28% 86%)", color: "hsl(20 20% 18%)" };
@@ -199,31 +186,6 @@ const Auth = () => {
           className="rounded-2xl p-6 md:p-8"
           style={{ background: "hsl(30 42% 99%)", border: "1px solid hsl(25 28% 88%)", boxShadow: "0 4px 24px hsl(20 18% 72%/0.15)" }}
         >
-          {/* Google button — only for login/register */}
-          {(mode === "login" || mode === "register") && (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full rounded-xl mb-4 flex items-center gap-2"
-                onClick={handleGoogle}
-              >
-                <Chrome className="w-4 h-4" />
-                {mode === "login" ? t("googleLogin") : t("googleRegister")}
-              </Button>
-              <div className="relative mb-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="px-2 text-muted-foreground" style={{ background: "hsl(30 42% 99%)" }}>
-                    {t("orEmail")}
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
-
           {/* Vendor toggle */}
           {mode === "register" && (
             <div
