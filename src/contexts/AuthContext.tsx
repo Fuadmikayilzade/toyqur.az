@@ -33,15 +33,6 @@ const getDbRole = async (userId: string): Promise<AppRole | null> => {
   return (data?.[0]?.role as AppRole) ?? null;
 };
 
-const fetchProfile = async (userId: string) => {
-  const { data } = await supabase
-    .from("profiles")
-    .select("full_name, phone, avatar_url")
-    .eq("user_id", userId)
-    .single();
-  return data;
-};
-
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -49,37 +40,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [role, setRole] = useState<AppRole | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
 
-  const loadUserData = async (sessionUser: User, isNewGoogleVendor = false) => {
+  const loadUserData = async (sessionUser: User, assignVendor = false) => {
     setUser(sessionUser);
 
-    // If this is a Google vendor signup, assign vendor role now
-    if (isNewGoogleVendor) {
-      const existing = await getDbRole(sessionUser.id);
-      if (!existing) {
-        // Insert vendor role directly
-        const { error } = await supabase
-          .from("user_roles")
-          .insert({ user_id: sessionUser.id, role: "vendor" as AppRole });
-
-        if (error) {
-          console.error("Failed to insert vendor role:", error.message);
-        }
-      }
-      // Clean URL
+    if (assignVendor) {
+      // Use SECURITY DEFINER RPC function — bypasses RLS
+      const { error } = await supabase.rpc("assign_vendor_role", {
+        p_user_id: sessionUser.id,
+      });
+      if (error) console.error("assign_vendor_role error:", error.message);
+      // Clear URL param
       window.history.replaceState({}, "", window.location.origin);
     }
 
-    const [dbRole, prof] = await Promise.all([
+    const [dbRole, profResult] = await Promise.all([
       getDbRole(sessionUser.id),
-      fetchProfile(sessionUser.id),
+      supabase.from("profiles").select("full_name, phone, avatar_url").eq("user_id", sessionUser.id).single(),
     ]);
 
     setRole(dbRole ?? "user");
-    setProfile(prof ?? null);
+    setProfile(profResult.data ?? null);
   };
 
   useEffect(() => {
-    // Check if returning from Google OAuth with vendor intent
     const urlParams = new URLSearchParams(window.location.search);
     const isGoogleVendor = urlParams.get("google_vendor") === "1";
 
@@ -95,12 +78,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       async (event, session) => {
         setSession(session);
         if (session?.user) {
+          const params = new URLSearchParams(window.location.search);
+          const vendorParam = params.get("google_vendor") === "1";
           if (event === "SIGNED_IN") {
-            // Check URL param again for cases where onAuthStateChange fires first
-            const params = new URLSearchParams(window.location.search);
-            const vendorParam = params.get("google_vendor") === "1";
             await loadUserData(session.user, vendorParam);
-          } else if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+          } else {
             await loadUserData(session.user, false);
           }
         } else if (!session) {
