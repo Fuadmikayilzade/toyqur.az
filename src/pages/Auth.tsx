@@ -1,5 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Heart, Mail, Lock, User, Eye, EyeOff, Check, X as XIcon, Chrome } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-type AuthMode = "login" | "register" | "forgot";
+type AuthMode = "login" | "register" | "forgot" | "reset";
 
 const checkPassword = (pw: string) => ({
   min: pw.length >= 8,
@@ -30,18 +30,34 @@ const Auth = () => {
   const { t } = useLanguage();
   useSEO({ title: t("login"), description: "ToyQur.az hesabınıza daxil olun və ya qeydiyyatdan keçin." });
   const [searchParams] = useSearchParams();
-  const initialMode: AuthMode = searchParams.get("mode") === "register" ? "register" : "login";
+  const initialMode: AuthMode = searchParams.get("mode") === "register"
+    ? "register"
+    : searchParams.get("mode") === "reset"
+    ? "reset"
+    : "login";
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [isVendor, setIsVendor] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Detect Supabase password reset session from URL hash
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes("type=recovery")) {
+      setMode("reset");
+    }
+  }, []);
+
   const pwChecks = useMemo(() => checkPassword(password), [password]);
   const pwStrength = strength(pwChecks);
+  const newPwChecks = useMemo(() => checkPassword(newPassword), [newPassword]);
+  const newPwStrength = strength(newPwChecks);
   const strengthColors = ["#e24b4a", "#e24b4a", "#ef9f27", "#1d9e75", "#1d9e75"];
   const strengthLabels = [t("passWeak"), t("passWeak"), t("passMedium"), t("passStrong"), t("passVeryStrong")];
 
@@ -56,6 +72,12 @@ const Auth = () => {
         if (error) throw error;
         toast.success("Şifrə yeniləmə linki e-poçtunuza göndərildi!");
         setMode("login");
+      } else if (mode === "reset") {
+        if (newPwStrength < 3) { toast.error("Şifrə kifayət qədər güclü deyil"); setLoading(false); return; }
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+        toast.success("Şifrəniz uğurla yeniləndi!");
+        navigate("/");
       } else if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -81,7 +103,14 @@ const Auth = () => {
     }
   };
 
+  // Google OAuth — vendor rolu searchParams-dan oxunur
   const handleGoogle = async () => {
+    // isVendor seçimini localStorage-da saxla ki, callback-də istifadə edilsin
+    if (isVendor) {
+      localStorage.setItem("toyqur_google_role", "vendor");
+    } else {
+      localStorage.removeItem("toyqur_google_role");
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin },
@@ -91,6 +120,16 @@ const Auth = () => {
 
   const inputCls = "w-full pl-10 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all";
   const inputStyle = { background: "hsl(28 38% 97%)", border: "1px solid hsl(25 28% 86%)", color: "hsl(20 20% 18%)" };
+
+  const modeTitle = mode === "login" ? t("login")
+    : mode === "register" ? t("register")
+    : mode === "reset" ? "Yeni Şifrə Təyin Et"
+    : t("resetPass");
+
+  const modeSub = mode === "login" ? t("authLoginSub")
+    : mode === "register" ? t("authRegisterSub")
+    : mode === "reset" ? "Yeni şifrənizi daxil edin"
+    : t("authForgotSub");
 
   return (
     <div
@@ -104,16 +143,8 @@ const Auth = () => {
             <Heart className="w-7 h-7 text-primary fill-primary" />
             <span className="text-2xl font-serif font-bold">ToyQur<span className="text-primary">.az</span></span>
           </div>
-          <h1 className="text-xl font-serif font-bold text-foreground">
-            {mode === "login" ? t("login") : mode === "register" ? t("register") : t("resetPass")}
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {mode === "login"
-              ? t("authLoginSub")
-              : mode === "register"
-              ? t("authRegisterSub")
-              : t("authForgotSub")}
-          </p>
+          <h1 className="text-xl font-serif font-bold text-foreground">{modeTitle}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{modeSub}</p>
         </div>
 
         {/* Card */}
@@ -121,8 +152,8 @@ const Auth = () => {
           className="rounded-2xl p-6 md:p-8"
           style={{ background: "hsl(30 42% 99%)", border: "1px solid hsl(25 28% 88%)", boxShadow: "0 4px 24px hsl(20 18% 72%/0.15)" }}
         >
-          {/* Google button */}
-          {mode !== "forgot" && (
+          {/* Google button — only for login/register */}
+          {(mode === "login" || mode === "register") && (
             <>
               <Button
                 type="button"
@@ -170,62 +201,101 @@ const Auth = () => {
               </div>
             )}
 
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                className={inputCls} style={inputStyle} placeholder={t("email")} required />
-            </div>
-
-            {mode !== "forgot" && (
+            {/* Reset mode — only new password field */}
+            {mode === "reset" ? (
               <div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
                     className={`${inputCls} pr-10`}
                     style={inputStyle}
-                    placeholder={t("password")}
+                    placeholder="Yeni şifrə"
                     required
                   />
-                  <button type="button" onClick={() => setShowPassword(v => !v)}
+                  <button type="button" onClick={() => setShowNewPassword(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-
-                {/* Password strength — register only */}
-                {mode === "register" && password.length > 0 && (
+                {newPassword.length > 0 && (
                   <div className="mt-3 space-y-2">
                     <div className="flex gap-1">
                       {[0, 1, 2, 3].map(i => (
                         <div key={i} className="h-1.5 flex-1 rounded-full transition-colors"
-                          style={{ background: i < pwStrength ? strengthColors[pwStrength] : "hsl(25 26% 86%)" }} />
+                          style={{ background: i < newPwStrength ? strengthColors[newPwStrength] : "hsl(25 26% 86%)" }} />
                       ))}
                     </div>
-                    <p className="text-xs font-medium" style={{ color: strengthColors[pwStrength] }}>
-                      {t("passStrength")}: {strengthLabels[pwStrength]}
+                    <p className="text-xs font-medium" style={{ color: strengthColors[newPwStrength] }}>
+                      {t("passStrength")}: {strengthLabels[newPwStrength]}
                     </p>
-                    <div className="grid grid-cols-1 gap-1">
-                      {([
-                        ["min", t("passMin")],
-                        ["upper", t("passUpper")],
-                        ["lower", t("passLower")],
-                        ["number", t("passNumber")],
-                        ["special", t("passSpecial")],
-                      ] as [keyof typeof pwChecks, string][]).map(([key, label]) => (
-                        <div key={key} className="flex items-center gap-2">
-                          {pwChecks[key]
-                            ? <Check className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#1d9e75" }} />
-                            : <XIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#e24b4a" }} />}
-                          <span className="text-xs" style={{ color: pwChecks[key] ? "#1d9e75" : "hsl(20 15% 55%)" }}>{label}</span>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 )}
               </div>
+            ) : (
+              <>
+                {mode !== "forgot" || mode === "forgot" ? (
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                      className={inputCls} style={inputStyle} placeholder={t("email")} required />
+                  </div>
+                ) : null}
+
+                {mode !== "forgot" && (
+                  <div>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        className={`${inputCls} pr-10`}
+                        style={inputStyle}
+                        placeholder={t("password")}
+                        required
+                      />
+                      <button type="button" onClick={() => setShowPassword(v => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {/* Password strength — register only */}
+                    {mode === "register" && password.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <div className="flex gap-1">
+                          {[0, 1, 2, 3].map(i => (
+                            <div key={i} className="h-1.5 flex-1 rounded-full transition-colors"
+                              style={{ background: i < pwStrength ? strengthColors[pwStrength] : "hsl(25 26% 86%)" }} />
+                          ))}
+                        </div>
+                        <p className="text-xs font-medium" style={{ color: strengthColors[pwStrength] }}>
+                          {t("passStrength")}: {strengthLabels[pwStrength]}
+                        </p>
+                        <div className="grid grid-cols-1 gap-1">
+                          {([
+                            ["min", t("passMin")],
+                            ["upper", t("passUpper")],
+                            ["lower", t("passLower")],
+                            ["number", t("passNumber")],
+                            ["special", t("passSpecial")],
+                          ] as [keyof typeof pwChecks, string][]).map(([key, label]) => (
+                            <div key={key} className="flex items-center gap-2">
+                              {pwChecks[key]
+                                ? <Check className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#1d9e75" }} />
+                                : <XIcon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "#e24b4a" }} />}
+                              <span className="text-xs" style={{ color: pwChecks[key] ? "#1d9e75" : "hsl(20 15% 55%)" }}>{label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             {mode === "login" && (
@@ -236,7 +306,11 @@ const Auth = () => {
             )}
 
             <Button type="submit" className="w-full rounded-xl" disabled={loading}>
-              {loading ? t("loading") : mode === "login" ? t("login") : mode === "register" ? t("register") : t("sendReset")}
+              {loading ? t("loading")
+                : mode === "login" ? t("login")
+                : mode === "register" ? t("register")
+                : mode === "reset" ? "Şifrəni Yenilə"
+                : t("sendReset")}
             </Button>
           </form>
 
@@ -249,6 +323,8 @@ const Auth = () => {
               <>{t("hasAccount")}{" "}
                 <button onClick={() => setMode("login")} className="text-primary hover:underline font-medium">{t("login")}</button>
               </>
+            ) : mode === "reset" ? (
+              <button onClick={() => navigate("/")} className="text-primary hover:underline font-medium">Ana səhifəyə qayıt</button>
             ) : (
               <button onClick={() => setMode("login")} className="text-primary hover:underline font-medium">{t("back")}</button>
             )}

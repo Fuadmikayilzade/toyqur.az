@@ -27,14 +27,18 @@ const formatPrice = (min: number | null, max: number | null) => {
     : `min ₼${min.toLocaleString()}`;
 };
 
-const VendorServices = ({ profileComplete = true }: { profileComplete?: boolean }) => {
+interface VendorServicesProps {
+  profileComplete?: boolean;
+}
+
+const VendorServices = ({ profileComplete = true }: VendorServicesProps) => {
   const { user } = useAuth();
   const { t } = useLanguage();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
-  const [storeReady, setStoreReady] = useState<boolean | null>(null); // null = loading
+  const [storeReady, setStoreReady] = useState<boolean | null>(null);
   const [showBrandSetup, setShowBrandSetup] = useState(false);
 
   const fetchServices = async () => {
@@ -45,13 +49,18 @@ const VendorServices = ({ profileComplete = true }: { profileComplete?: boolean 
     ]);
     if (error) { toast.error(t("svcLoadErr")); }
     else { setServices(svcData || []); }
-    // Store is "ready" if brand_name, brand_logo and at least one phone filled
     const ready = !!(profile?.brand_name && profile?.brand_logo && (profile?.brand_phone1 || profile?.brand_whatsapp));
     setStoreReady(ready);
     setLoading(false);
   };
 
   useEffect(() => { fetchServices(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleAddService = () => {
+    if (!profileComplete) { toast.error(t("profileFillRequired")); return; }
+    if (!storeReady) { setShowBrandSetup(true); }
+    else { setShowForm(true); }
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm(t("deleteConfirm"))) return;
@@ -62,7 +71,6 @@ const VendorServices = ({ profileComplete = true }: { profileComplete?: boolean 
 
   if (loading || storeReady === null) return <div className="text-center py-10 text-muted-foreground">{t("loading")}</div>;
 
-  // Show brand setup inline if store not ready
   if (showBrandSetup) {
     return (
       <div>
@@ -78,16 +86,12 @@ const VendorServices = ({ profileComplete = true }: { profileComplete?: boolean 
     );
   }
 
-  // Prompt to set up store before adding first product
   if (!storeReady && services.length === 0) {
     return (
       <div className="rounded-2xl p-8 text-center" style={{ background: "linear-gradient(160deg, hsl(30 42% 98%) 0%, hsl(24 35% 95%) 100%)", border: "1px solid hsl(25 28% 87%)" }}>
         <Store className="w-14 h-14 mx-auto mb-4" style={{ color: "hsl(16 38% 50%)" }} />
         <h3 className="text-lg font-serif font-semibold text-foreground mb-2">{t("setupStore")}</h3>
-        <p className="text-sm text-muted-foreground mb-1 max-w-sm mx-auto">
-          {t("setupStoreMsg")}
-        </p>
-        <p className="text-xs text-muted-foreground mb-6"></p>
+        <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">{t("setupStoreMsg")}</p>
         <Button className="rounded-xl" onClick={() => {
           if (!profileComplete) { toast.error(t("profileFillRequired")); return; }
           setShowBrandSetup(true);
@@ -120,7 +124,7 @@ const VendorServices = ({ profileComplete = true }: { profileComplete?: boolean 
         <h2 className="text-xl font-serif font-semibold text-foreground">
           {t("svcCount")} ({services.length})
         </h2>
-        <Button onClick={() => { if (!profileComplete) { toast.error(t("profileFillRequired")); return; } if (!storeReady) { setShowBrandSetup(true); } else { setShowForm(true); } }} className="rounded-xl">
+        <Button onClick={handleAddService} className="rounded-xl">
           <Plus className="w-4 h-4 mr-2" />
           {t("newService")}
         </Button>
@@ -130,7 +134,7 @@ const VendorServices = ({ profileComplete = true }: { profileComplete?: boolean 
         <div className="text-center py-16 rounded-2xl" style={cardStyle}>
           <ImageIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground mb-4">{t("noServicesYet")}</p>
-          <Button onClick={() => { if (!profileComplete) { toast.error(t("profileFillRequired")); return; } if (!storeReady) { setShowBrandSetup(true); } else { setShowForm(true); } }} className="rounded-xl">
+          <Button onClick={handleAddService} className="rounded-xl">
             <Plus className="w-4 h-4 mr-2" />{t("addFirstService")}
           </Button>
         </div>
@@ -166,7 +170,6 @@ const VendorServices = ({ profileComplete = true }: { profileComplete?: boolean 
                     {formatPrice(service.price_min, service.price_max) || t("askPrice")}
                   </p>
 
-                  {/* Dates */}
                   <div className="space-y-1 mb-3">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Calendar className="w-3 h-3" />

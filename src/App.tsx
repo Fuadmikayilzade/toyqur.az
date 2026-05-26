@@ -21,6 +21,7 @@ import Support from "./pages/Support.tsx";
 import Profile from "./pages/Profile.tsx";
 import VendorStore from "./pages/VendorStore.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import FloatingButtons from "@/components/FloatingButtons";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const AppRoutes = () => {
         <Route path="/store/:vendorId" element={<VendorStore />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      <FloatingButtons />
     </AuthProvider>
   );
 };

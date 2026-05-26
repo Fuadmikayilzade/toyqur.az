@@ -43,10 +43,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
+
         if (session?.user) {
+          // Google ilə qeydiyyat zamanı vendor rolu tətbiq et
+          if (event === "SIGNED_IN") {
+            const pendingRole = localStorage.getItem("toyqur_google_role");
+            if (pendingRole === "vendor") {
+              localStorage.removeItem("toyqur_google_role");
+              // Check if role already exists
+              const { data: existingRoles } = await supabase
+                .from("user_roles")
+                .select("role")
+                .eq("user_id", session.user.id);
+              // Only update if user has no role yet (first time Google login)
+              if (!existingRoles || existingRoles.length === 0) {
+                await supabase.from("user_roles").upsert({
+                  user_id: session.user.id,
+                  role: "vendor" as AppRole,
+                });
+              }
+            }
+          }
           setTimeout(() => fetchUserData(session.user.id), 0);
         } else {
           setRole(null);

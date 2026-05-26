@@ -146,12 +146,20 @@ const ListingCard = ({ listing }: { listing: Listing }) => {
         {/* Price badge */}
         {listing.priceRange && listing.priceRange !== t("askPrice") && (
           <div className="absolute bottom-3 left-3 z-10">
-            <span
-              className="text-xs font-medium px-3 py-1 rounded-full"
-              style={{ background: "hsl(28 38% 97% / 0.88)", backdropFilter: "blur(6px)", color: "hsl(20 20% 20%)" }}
+            <div
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl"
+              style={{
+                background: "linear-gradient(135deg, hsl(57, 82%, 60%) 0%, hsl(20 45% 28%) 100%)",
+                boxShadow: "0 2px 10px hsl(16 38% 30% / 0.5)",
+              }}
             >
-              {formatPrice(listing.priceRange)}
-            </span>
+              <span
+                className="text-sm font-bold tracking-wide"
+                style={{ color: "hsl(30 60% 96%)" }}
+              >
+                {formatPrice(listing.priceRange)}
+              </span>
+            </div>
           </div>
         )}
       </div>
@@ -169,7 +177,7 @@ const ListingCard = ({ listing }: { listing: Listing }) => {
             />
           )}
           <h3
-            className="font-serif font-semibold transition-colors group-hover:text-primary leading-snug"
+            className="font-serif font-bold transition-colors group-hover:text-primary leading-snug text-xl"
             style={{ color: "hsl(20 20% 18%)" }}
           >
             {listing.title}

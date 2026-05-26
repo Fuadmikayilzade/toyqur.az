@@ -116,6 +116,7 @@ const Categories = () => {
   const [loading, setLoading] = useState(true);
 
   const isVenue = isVenueCategory(selectedCat);
+  const isLocationCat = ["buket", "gelinlik-buketi"].includes(selectedCat);
 
   // Update URL params when category changes
   const handleCatChange = useCallback((catId: string) => {
@@ -406,7 +407,7 @@ const Categories = () => {
                 )}
 
                 {/* Guest count (venue only) */}
-                {isVenue && (
+                {(isVenue || isLocationCat) && (
                   <div>
                     <label className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
                       <Users className="w-3.5 h-3.5" /> Qonaq sayı

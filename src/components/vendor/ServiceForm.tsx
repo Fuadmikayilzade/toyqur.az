@@ -19,6 +19,7 @@ interface ServiceFormProps {
 
 const isBrideAssistant = (cat: string) => cat === "bride-assistant";
 const needsAddress = (cat: string) => ["wedding-hall", "banquet-hall", "dress", "car"].includes(cat);
+const isLocationCategory = (cat: string) => ["buket", "gelinlik-buketi"].includes(cat);
 const isVideoFile = (url: string) => ["mp4", "mov", "webm", "avi"].includes(url.split(".").pop()?.toLowerCase() || "");
 
 // ── Meta parse/build ──────────────────────────────────────────────────────────
@@ -98,6 +99,7 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
   const isVenue   = isVenueCategory(form.category);
   const isBa      = isBrideAssistant(form.category);
   const showAddress = needsAddress(form.category);
+  const isBuketCat = isLocationCategory(form.category);
 
   // ── Upload helpers ──────────────────────────────────────────────────────────
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -375,21 +377,48 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
         </div>
 
         {/* ── Price ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">
-              {isVenue ? t("minSeatPrice") : t("minPrice")} *
-            </label>
-            <input type="number" value={form.price_min} onChange={e => setForm({...form, price_min: e.target.value})}
-              className={inputCls} style={inputStyle} placeholder={isVenue ? "50" : "200"} min="0" required />
+        <div className="rounded-2xl p-5" style={{ background: "hsl(22 38% 94%)", border: "2px solid hsl(16 38% 72%)" }}>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-base font-bold" style={{ color: "hsl(16 38% 36%)" }}>₼</span>
+            <span className="text-sm font-semibold" style={{ color: "hsl(16 38% 36%)" }}>Qiymət</span>
           </div>
-          <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">
-              {isVenue ? t("maxSeatPrice") : t("maxPrice")}
-              <span className="text-xs text-muted-foreground ml-1">(İstəyə görə)</span>
-            </label>
-            <input type="number" value={form.price_max} onChange={e => setForm({...form, price_max: e.target.value})}
-              className={inputCls} style={inputStyle} placeholder={isVenue ? "150" : "1500"} min="0" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider mb-2 block" style={{ color: "hsl(16 38% 48%)" }}>
+                {isVenue ? t("minSeatPrice") : t("minPrice")} *
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold" style={{ color: "hsl(16 38% 44%)" }}>₼</span>
+                <input
+                  type="number"
+                  value={form.price_min}
+                  onChange={e => setForm({...form, price_min: e.target.value})}
+                  className="w-full pl-10 pr-4 py-4 rounded-xl text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                  style={{ background: "hsl(30 42% 99%)", border: "1.5px solid hsl(16 38% 68%)", color: "hsl(20 20% 18%)" }}
+                  placeholder={isVenue ? "50" : "200"}
+                  min="0"
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider mb-2 block" style={{ color: "hsl(20 12% 52%)" }}>
+                {isVenue ? t("maxSeatPrice") : t("maxPrice")}
+                <span className="text-xs font-normal ml-1">(istəyə görə)</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold" style={{ color: "hsl(20 12% 60%)" }}>₼</span>
+                <input
+                  type="number"
+                  value={form.price_max}
+                  onChange={e => setForm({...form, price_max: e.target.value})}
+                  className="w-full pl-10 pr-4 py-4 rounded-xl text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                  style={{ background: "hsl(30 42% 99%)", border: "1.5px solid hsl(25 28% 82%)", color: "hsl(20 20% 18%)" }}
+                  placeholder={isVenue ? "150" : "1500"}
+                  min="0"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -406,7 +435,7 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
               <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             </div>
           </div>
-          {isVenue && form.location === "Bakı" && (
+          {(isVenue || isBuketCat) && form.location === "Bakı" && (
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Rayon</label>
               <div className="relative">
@@ -442,6 +471,7 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
                     <iframe title="map-preview" width="100%" height="200"
                       style={{ border: 0, display: "block" }} loading="lazy"
                       allowFullScreen referrerPolicy="no-referrer-when-downgrade"
+                      allow="geolocation"
                       src={mapSrc} />
                     <div className="px-3 py-2 flex items-center justify-between border-t border-border"
                       style={{ background: "hsl(28 35% 95%)" }}>
@@ -474,20 +504,17 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
         {isVenue && (
           <>
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Qonaq tutumu</label>
-              <div className="relative">
-                <select value={capacity} onChange={e => setCapacity(e.target.value)}
-                  className={`${inputCls} appearance-none`} style={inputStyle}>
-                  <option value="">{t("select")}</option>
-                  <option value="50">{t("cap50")}</option>
-                  <option value="100">50–100</option>
-                  <option value="200">100–200</option>
-                  <option value="300">200–300</option>
-                  <option value="500">300–500</option>
-                  <option value="1000">500+</option>
-                </select>
-                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-              </div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Qonaq sayı</label>
+              <input
+                type="number"
+                value={capacity}
+                onChange={e => setCapacity(e.target.value)}
+                className={inputCls}
+                style={inputStyle}
+                placeholder="Məsələn: 250"
+                min="0"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Məkanın maksimum qonaq tutumunu daxil edin</p>
             </div>
 
             <div className="rounded-xl p-5" style={sectionStyle}>

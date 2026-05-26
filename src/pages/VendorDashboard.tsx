@@ -19,7 +19,6 @@ const VendorDashboard = () => {
     { id: "brand" as const, label: t("store_settings"), icon: Store },
   ];
   const [activeTab, setActiveTab] = useState<Tab>("services");
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -97,7 +96,7 @@ const VendorDashboard = () => {
           </div>
 
           {activeTab === "services" && <VendorServices profileComplete={profileComplete} />}
-          {activeTab === "brand"    && <BrandSettings />}
+          {activeTab === "brand" && <BrandSettings />}
         </div>
       </div>
       <Footer />

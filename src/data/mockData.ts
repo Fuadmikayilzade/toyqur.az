@@ -6,6 +6,7 @@ export interface Category {
   count: number;
   group?: string;
   svgIcon?: string;
+  hasLocation?: boolean;
 }
 
 export interface Listing {
@@ -38,7 +39,10 @@ export const categories: Category[] = [
   // Digər kateqoriyalar
   { id: "photographer", name: "Fotoqraf", emoji: "📸", icon: "Camera", count: 0 },
   { id: "videographer", name: "Videoqraf", emoji: "🎬", icon: "Video", count: 0 },
+  { id: "mobilograf", name: "Mobiloqraf", emoji: "📱", icon: "Smartphone", count: 0 },
   { id: "cake", name: "Tort", emoji: "🎂", icon: "Cake", count: 0 },
+  { id: "buket", name: "Buket", emoji: "💐", icon: "Flower", count: 0, hasLocation: true },
+  { id: "gelinlik-buketi", name: "Gəlinlik buketi", emoji: "👰", icon: "Flower2", count: 0, hasLocation: true },
   { id: "xonca", name: "Xonça", emoji: "🧺", icon: "Gift", count: 0 },
   { id: "invitation", name: "Dəvətnamə", emoji: "💌", icon: "Mail", count: 0 },
   { id: "mc", name: "Aparıcı", emoji: "🎤", icon: "Mic", count: 0 },
@@ -51,8 +55,7 @@ export const categories: Category[] = [
   { id: "singer", name: "Müğənni", emoji: "🎶", icon: "Mic", count: 0 },
   { id: "dance-group", name: "Rəqs qrupu", emoji: "💃", icon: "Music", count: 0 },
   { id: "beauty-salon", name: "Gözəllik salonu", emoji: "💄", icon: "Sparkles", count: 0 },
-  { id: "kids-animator", name: "Uşaq animatorları", emoji: "🎪", icon: "PartyPopper", count: 0 },
-  { id: "bride-assistant", name: "Bride Assistant", emoji: "👗", icon: "UserHeart", count: 0 },
+  { id: "bride-assistant", name: "Gəlin köməkçisi", emoji: "👗", icon: "UserHeart", count: 0 },
 ];
 
 export const featuredListings: Listing[] = [

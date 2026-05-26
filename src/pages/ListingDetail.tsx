@@ -360,6 +360,7 @@ const ListingDetail = () => {
                           loading="lazy"
                           allowFullScreen
                           referrerPolicy="no-referrer-when-downgrade"
+                          allow="geolocation *; fullscreen"
                           src={embedSrc}
                         />
                       </div>
@@ -721,7 +722,7 @@ const ListingDetail = () => {
               <span className="w-1 h-5 rounded-full inline-block" style={{ background: "hsl(25 35% 65%)" }} />
               {t("otherProducts")}
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {mixedServices.map(s => (
                 <ListingCard key={s.id} listing={{
                   id: s.id, title: s.title, category: s.category,
