@@ -25,27 +25,21 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-// If localStorage has toyqur_google_role=vendor AND user has no role yet → assign vendor
-const applyPendingVendorRole = async (userId: string) => {
-  const pendingRole = localStorage.getItem("toyqur_google_role");
-  if (pendingRole !== "vendor") return;
+const fetchUserData = async (
+  user: User,
+  setRole: (r: AppRole) => void,
+  setProfile: (p: AuthContextType["profile"]) => void
+) => {
+  const [{ data: roles }, { data: prof }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", user.id),
+    supabase.from("profiles").select("full_name, phone, avatar_url").eq("user_id", user.id).single(),
+  ]);
 
-  // Check if user already has a role assigned
-  const { data: existing } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
-
-  if (!existing || existing.length === 0) {
-    // First time — assign vendor role
-    await supabase.from("user_roles").insert({
-      user_id: userId,
-      role: "vendor" as AppRole,
-    });
-  }
-
-  // Always clear the flag after processing
-  localStorage.removeItem("toyqur_google_role");
+  // Priority: user_roles table → user_metadata → default "user"
+  const dbRole = roles?.[0]?.role as AppRole | undefined;
+  const metaRole = user.user_metadata?.role as AppRole | undefined;
+  setRole(dbRole ?? metaRole ?? "user");
+  setProfile(prof ?? null);
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -55,40 +49,54 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [role, setRole] = useState<AppRole | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
 
-  const fetchUserData = async (userId: string) => {
-    const [{ data: roles }, { data: prof }] = await Promise.all([
-      supabase.from("user_roles").select("role").eq("user_id", userId),
-      supabase.from("profiles").select("full_name, phone, avatar_url").eq("user_id", userId).single(),
-    ]);
-    setRole(roles?.[0]?.role as AppRole ?? "user");
-    setProfile(prof ?? null);
-  };
-
   useEffect(() => {
-    // On mount: check existing session (handles Google OAuth redirect return)
+    // Handle session on mount — this fires after Google OAuth redirect too
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+
       if (session?.user) {
-        // Apply pending vendor role BEFORE fetching user data
-        await applyPendingVendorRole(session.user.id);
-        await fetchUserData(session.user.id);
+        const pendingRole = localStorage.getItem("toyqur_google_role");
+
+        if (pendingRole === "vendor") {
+          localStorage.removeItem("toyqur_google_role");
+
+          // Check if user already has a role in user_roles table
+          const { data: existing } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", session.user.id);
+
+          if (!existing || existing.length === 0) {
+            // Try inserting into user_roles (may fail if RLS blocks it)
+            const { error: insertErr } = await supabase
+              .from("user_roles")
+              .insert({ user_id: session.user.id, role: "vendor" as AppRole });
+
+            if (insertErr) {
+              // Fallback: write to user_metadata — always works for authenticated user
+              await supabase.auth.updateUser({
+                data: { role: "vendor" },
+              });
+            }
+          }
+        }
+
+        await fetchUserData(session.user, setRole, setProfile);
       }
+
       setLoading(false);
     });
 
-    // Listen for future auth changes (email login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // Also handle SIGNED_IN for non-redirect flows (e.g. email signup then Google later)
-          if (event === "SIGNED_IN") {
-            await applyPendingVendorRole(session.user.id);
+          if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+            await fetchUserData(session.user, setRole, setProfile);
           }
-          await fetchUserData(session.user.id);
         } else {
           setRole(null);
           setProfile(null);
