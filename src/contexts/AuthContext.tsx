@@ -25,21 +25,35 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-const fetchUserData = async (
-  user: User,
-  setRole: (r: AppRole) => void,
-  setProfile: (p: AuthContextType["profile"]) => void
-) => {
-  const [{ data: roles }, { data: prof }] = await Promise.all([
-    supabase.from("user_roles").select("role").eq("user_id", user.id),
-    supabase.from("profiles").select("full_name, phone, avatar_url").eq("user_id", user.id).single(),
-  ]);
+const resolveRole = async (user: User): Promise<AppRole> => {
+  // 1. Check user_roles table first
+  const { data: roles } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", user.id);
 
-  // Priority: user_roles table → user_metadata → default "user"
-  const dbRole = roles?.[0]?.role as AppRole | undefined;
+  if (roles && roles.length > 0) {
+    return roles[0].role as AppRole;
+  }
+
+  // 2. Check user_metadata (set by our vendor flow)
   const metaRole = user.user_metadata?.role as AppRole | undefined;
-  setRole(dbRole ?? metaRole ?? "user");
-  setProfile(prof ?? null);
+  if (metaRole) return metaRole;
+
+  return "user";
+};
+
+const assignVendorRole = async (userId: string): Promise<void> => {
+  // Try inserting into user_roles
+  const { error } = await supabase
+    .from("user_roles")
+    .insert({ user_id: userId, role: "vendor" as AppRole });
+
+  if (error) {
+    console.warn("user_roles insert failed, falling back to metadata:", error.message);
+    // Fallback: write to user_metadata
+    await supabase.auth.updateUser({ data: { role: "vendor" } });
+  }
 };
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -49,55 +63,58 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [role, setRole] = useState<AppRole | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
 
+  const loadUser = async (sessionUser: User) => {
+    setUser(sessionUser);
+
+    // Check if redirected back from Google with vendor_signup flag in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const isVendorSignup = urlParams.get("vendor_signup") === "1";
+
+    if (isVendorSignup) {
+      // Clean the URL param immediately
+      const cleanUrl = window.location.origin + window.location.pathname;
+      window.history.replaceState({}, "", cleanUrl);
+
+      // Check if user already has a role
+      const { data: existing } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", sessionUser.id);
+
+      if (!existing || existing.length === 0) {
+        await assignVendorRole(sessionUser.id);
+        // Re-fetch the user to get updated metadata
+        const { data: { user: refreshed } } = await supabase.auth.getUser();
+        if (refreshed) setUser(refreshed);
+      }
+    }
+
+    // Fetch role and profile
+    const [resolvedRole, profileResult] = await Promise.all([
+      resolveRole(sessionUser),
+      supabase.from("profiles").select("full_name, phone, avatar_url").eq("user_id", sessionUser.id).single(),
+    ]);
+
+    setRole(resolvedRole);
+    setProfile(profileResult.data ?? null);
+  };
+
   useEffect(() => {
-    // Handle session on mount — this fires after Google OAuth redirect too
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
-
       if (session?.user) {
-        const pendingRole = localStorage.getItem("toyqur_google_role");
-
-        if (pendingRole === "vendor") {
-          localStorage.removeItem("toyqur_google_role");
-
-          // Check if user already has a role in user_roles table
-          const { data: existing } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", session.user.id);
-
-          if (!existing || existing.length === 0) {
-            // Try inserting into user_roles (may fail if RLS blocks it)
-            const { error: insertErr } = await supabase
-              .from("user_roles")
-              .insert({ user_id: session.user.id, role: "vendor" as AppRole });
-
-            if (insertErr) {
-              // Fallback: write to user_metadata — always works for authenticated user
-              await supabase.auth.updateUser({
-                data: { role: "vendor" },
-              });
-            }
-          }
-        }
-
-        await fetchUserData(session.user, setRole, setProfile);
+        await loadUser(session.user);
       }
-
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session);
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-            await fetchUserData(session.user, setRole, setProfile);
-          }
-        } else {
+        if (session?.user && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
+          await loadUser(session.user);
+        } else if (!session) {
+          setUser(null);
           setRole(null);
           setProfile(null);
         }
@@ -106,7 +123,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signOut = async () => {
     await supabase.auth.signOut();

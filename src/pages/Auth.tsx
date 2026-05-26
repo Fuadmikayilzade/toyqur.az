@@ -105,15 +105,14 @@ const Auth = () => {
 
   // Google OAuth — vendor rolu searchParams-dan oxunur
   const handleGoogle = async () => {
-    // isVendor seçimini localStorage-da saxla ki, callback-də istifadə edilsin
-    if (isVendor) {
-      localStorage.setItem("toyqur_google_role", "vendor");
-    } else {
-      localStorage.removeItem("toyqur_google_role");
-    }
+    // Pass vendor flag directly in the redirect URL — localStorage unreliable across redirects
+    const redirectUrl = isVendor
+      ? `${window.location.origin}/?vendor_signup=1`
+      : window.location.origin;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: redirectUrl },
     });
     if (error) toast.error(error.message || "Google ilə giriş mümkün olmadı");
   };
