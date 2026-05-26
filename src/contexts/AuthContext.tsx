@@ -25,6 +25,29 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+// If localStorage has toyqur_google_role=vendor AND user has no role yet → assign vendor
+const applyPendingVendorRole = async (userId: string) => {
+  const pendingRole = localStorage.getItem("toyqur_google_role");
+  if (pendingRole !== "vendor") return;
+
+  // Check if user already has a role assigned
+  const { data: existing } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+
+  if (!existing || existing.length === 0) {
+    // First time — assign vendor role
+    await supabase.from("user_roles").insert({
+      user_id: userId,
+      role: "vendor" as AppRole,
+    });
+  }
+
+  // Always clear the flag after processing
+  localStorage.removeItem("toyqur_google_role");
+};
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -42,32 +65,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
+    // On mount: check existing session (handles Google OAuth redirect return)
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        // Apply pending vendor role BEFORE fetching user data
+        await applyPendingVendorRole(session.user.id);
+        await fetchUserData(session.user.id);
+      }
+      setLoading(false);
+    });
+
+    // Listen for future auth changes (email login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // Google ilə qeydiyyat zamanı vendor rolu tətbiq et
+          // Also handle SIGNED_IN for non-redirect flows (e.g. email signup then Google later)
           if (event === "SIGNED_IN") {
-            const pendingRole = localStorage.getItem("toyqur_google_role");
-            if (pendingRole === "vendor") {
-              localStorage.removeItem("toyqur_google_role");
-              // Check if role already exists
-              const { data: existingRoles } = await supabase
-                .from("user_roles")
-                .select("role")
-                .eq("user_id", session.user.id);
-              // Only update if user has no role yet (first time Google login)
-              if (!existingRoles || existingRoles.length === 0) {
-                await supabase.from("user_roles").upsert({
-                  user_id: session.user.id,
-                  role: "vendor" as AppRole,
-                });
-              }
-            }
+            await applyPendingVendorRole(session.user.id);
           }
-          setTimeout(() => fetchUserData(session.user.id), 0);
+          await fetchUserData(session.user.id);
         } else {
           setRole(null);
           setProfile(null);
@@ -75,15 +96,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setLoading(false);
       }
     );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserData(session.user.id);
-      }
-      setLoading(false);
-    });
 
     return () => subscription.unsubscribe();
   }, []);
