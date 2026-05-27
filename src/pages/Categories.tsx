@@ -14,6 +14,10 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+// Returns first media (image or video) — whatever was uploaded first
+const firstImage = (images?: string[] | null): string => images?.[0] || "/placeholder.svg";
+
+
 interface ServiceListing {
   id: string;
   title: string;
@@ -116,7 +120,6 @@ const Categories = () => {
   const [loading, setLoading] = useState(true);
 
   const isVenue = isVenueCategory(selectedCat);
-  const isLocationCat = ["buket", "gelinlik-buketi"].includes(selectedCat);
 
   // Update URL params when category changes
   const handleCatChange = useCallback((catId: string) => {
@@ -207,7 +210,7 @@ const Categories = () => {
       : t("askPrice"),
     rating: s.rating || 0,
     reviewCount: s.review_count || 0,
-    image: s.images?.[0] || "/placeholder.svg",
+    image: firstImage(s.images),
     vendor: "",
     featured: false,
     description: s.description || "",
@@ -407,7 +410,7 @@ const Categories = () => {
                 )}
 
                 {/* Guest count (venue only) */}
-                {(isVenue || isLocationCat) && (
+                {isVenue && (
                   <div>
                     <label className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
                       <Users className="w-3.5 h-3.5" /> Qonaq sayı

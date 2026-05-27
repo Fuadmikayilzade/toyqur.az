@@ -14,6 +14,10 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
 import { categories } from "@/data/mockData";
 
+// Returns first media (image or video) — whatever was uploaded first
+const firstImage = (images?: string[] | null): string => images?.[0] || "/placeholder.svg";
+
+
 const isVideoFile = (url: string) => {
   const ext = url.split(".").pop()?.toLowerCase() || "";
   return ["mp4", "mov", "webm", "avi"].includes(ext);
@@ -93,7 +97,7 @@ const ListingDetail = () => {
           ? service.description.indexOf("\n---\n")
           : 155).trim().slice(0, 155)
       : undefined,
-    image: service?.images?.[0],
+    image: firstImage(service?.images),
   });
 
   useEffect(() => {
@@ -360,7 +364,6 @@ const ListingDetail = () => {
                           loading="lazy"
                           allowFullScreen
                           referrerPolicy="no-referrer-when-downgrade"
-                          allow="geolocation *; fullscreen"
                           src={embedSrc}
                         />
                       </div>
@@ -704,7 +707,7 @@ const ListingDetail = () => {
                   location: s.location || "",
                   priceRange: s.price_min ? (s.price_max ? `min ₼${s.price_min} — max ₼${s.price_max}` : `min ₼${s.price_min}`) : t("askPrice"),
                   rating: s.rating || 0, reviewCount: s.review_count || 0,
-                  image: s.images?.[0] || "/placeholder.svg",
+                  image: firstImage(s.images),
                   vendor: "", featured: false,
                   description: s.description || "", images: s.images || [],
                 }} />
@@ -722,14 +725,14 @@ const ListingDetail = () => {
               <span className="w-1 h-5 rounded-full inline-block" style={{ background: "hsl(25 35% 65%)" }} />
               {t("otherProducts")}
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {mixedServices.map(s => (
                 <ListingCard key={s.id} listing={{
                   id: s.id, title: s.title, category: s.category,
                   location: s.location || "",
                   priceRange: s.price_min ? (s.price_max ? `min ₼${s.price_min} — max ₼${s.price_max}` : `min ₼${s.price_min}`) : "Qiymət soruşun",
                   rating: s.rating || 0, reviewCount: s.review_count || 0,
-                  image: s.images?.[0] || "/placeholder.svg",
+                  image: firstImage(s.images),
                   vendor: "", featured: false,
                   description: s.description || "", images: s.images || [],
                 }} />

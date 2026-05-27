@@ -30,6 +30,18 @@ const formatPrice = (priceRange: string): string => {
   return `min ${priceRange}`;
 };
 
+// Check if URL is a video file
+const isVideoUrl = (url: string) =>
+  /\.(mp4|mov|webm|avi|mkv)(\?|$)/i.test(url);
+
+// Pick first image, fallback to first video if no images
+const firstMedia = (images?: string[] | null) => {
+  if (!images || images.length === 0) return { url: "/placeholder.svg", isVideo: false };
+  const img = images.find(u => !isVideoUrl(u));
+  if (img) return { url: img, isVideo: false };
+  return { url: images[0], isVideo: true };
+};
+
 // Blurred image with fade-in on load
 const LazyImage = ({ src, alt, className }: { src: string; alt: string; className?: string }) => {
   const [loaded, setLoaded] = useState(false);
@@ -127,11 +139,23 @@ const ListingCard = ({ listing }: { listing: Listing }) => {
       {/* Image with lazy load + blur-up */}
       <div className="relative aspect-[4/3] overflow-hidden">
         <div className="w-full h-full group-hover:scale-105 transition-transform duration-500">
-          <LazyImage
-            src={listing.image}
-            alt={listing.title}
-            className="w-full h-full object-cover"
-          />
+          {listing.image && isVideoUrl(listing.image) ? (
+            <video
+              src={listing.image}
+              className="w-full h-full object-cover"
+              muted
+              playsInline
+              preload="metadata"
+              onMouseOver={e => (e.currentTarget as HTMLVideoElement).play()}
+              onMouseOut={e => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
+            />
+          ) : (
+            <LazyImage
+              src={listing.image}
+              alt={listing.title}
+              className="w-full h-full object-cover"
+            />
+          )}
         </div>
 
         {/* Favorite button */}
@@ -146,20 +170,12 @@ const ListingCard = ({ listing }: { listing: Listing }) => {
         {/* Price badge */}
         {listing.priceRange && listing.priceRange !== t("askPrice") && (
           <div className="absolute bottom-3 left-3 z-10">
-            <div
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl"
-              style={{
-                background: "linear-gradient(135deg, hsl(57, 82%, 60%) 0%, hsl(20 45% 28%) 100%)",
-                boxShadow: "0 2px 10px hsl(16 38% 30% / 0.5)",
-              }}
+            <span
+              className="text-xs font-medium px-3 py-1 rounded-full"
+              style={{ background: "hsl(28 38% 97% / 0.88)", backdropFilter: "blur(6px)", color: "hsl(20 20% 20%)" }}
             >
-              <span
-                className="text-sm font-bold tracking-wide"
-                style={{ color: "hsl(30 60% 96%)" }}
-              >
-                {formatPrice(listing.priceRange)}
-              </span>
-            </div>
+              {formatPrice(listing.priceRange)}
+            </span>
           </div>
         )}
       </div>
@@ -177,7 +193,7 @@ const ListingCard = ({ listing }: { listing: Listing }) => {
             />
           )}
           <h3
-            className="font-serif font-bold transition-colors group-hover:text-primary leading-snug text-xl"
+            className="font-serif font-semibold transition-colors group-hover:text-primary leading-snug"
             style={{ color: "hsl(20 20% 18%)" }}
           >
             {listing.title}

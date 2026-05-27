@@ -9,6 +9,10 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useSEO } from "@/hooks/useSEO";
 import { categories } from "@/data/mockData";
 
+// Returns first media (image or video) — whatever was uploaded first
+const firstImage = (images?: string[] | null): string => images?.[0] || "/placeholder.svg";
+
+
 interface VendorProfile {
   vendor_id: string;
   brand_name: string | null;
@@ -67,7 +71,7 @@ const VendorStore = () => {
     location: s.location || "",
     priceRange: s.price_min ? (s.price_max ? `min ₼${s.price_min} — max ₼${s.price_max}` : `min ₼${s.price_min}`) : "Qiymət soruşun",
     rating: s.rating || 0, reviewCount: s.review_count || 0,
-    image: s.images?.[0] || "/placeholder.svg",
+    image: firstImage(s.images),
     vendor: "", featured: false,
     description: s.description || "", images: s.images || [],
   });
