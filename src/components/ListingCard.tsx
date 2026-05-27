@@ -1,7 +1,7 @@
 import { Heart, Star, MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Listing } from "@/data/mockData";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -42,6 +42,64 @@ const firstMedia = (images?: string[] | null) => {
   return { url: images[0], isVideo: true };
 };
 
+
+// iOS-safe video thumbnail — draws first frame via canvas
+const VideoThumb = ({ src }: { src: string }) => {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = React.useState(false);
+
+  React.useEffect(() => {
+    const video = document.createElement("video");
+    video.src = src;
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+
+    const draw = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 360;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      setReady(true);
+      video.remove();
+    };
+
+    video.addEventListener("loadeddata", () => {
+      video.currentTime = 0.1;
+    });
+    video.addEventListener("seeked", draw);
+    video.addEventListener("error", () => setReady(true)); // show placeholder on error
+    video.load();
+  }, [src]);
+
+  return (
+    <div className="w-full h-full relative flex items-center justify-center"
+      style={{ background: "hsl(25 28% 88%)" }}>
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full object-cover"
+        style={{ display: ready ? "block" : "none" }}
+      />
+      {!ready && (
+        <div className="absolute inset-0 animate-pulse"
+          style={{ background: "linear-gradient(110deg, hsl(25 26% 91%) 40%, hsl(25 26% 87%) 50%, hsl(25 26% 91%) 60%)" }} />
+      )}
+      {/* Play icon overlay */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="w-12 h-12 rounded-full flex items-center justify-center"
+          style={{ background: "hsl(20 20% 10% / 0.45)", backdropFilter: "blur(4px)" }}>
+          <svg viewBox="0 0 24 24" fill="white" className="w-5 h-5 ml-0.5">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+};
 // Blurred image with fade-in on load
 const LazyImage = ({ src, alt, className }: { src: string; alt: string; className?: string }) => {
   const [loaded, setLoaded] = useState(false);
@@ -140,15 +198,7 @@ const ListingCard = ({ listing }: { listing: Listing }) => {
       <div className="relative aspect-[4/3] overflow-hidden">
         <div className="w-full h-full group-hover:scale-105 transition-transform duration-500">
           {listing.image && isVideoUrl(listing.image) ? (
-            <video
-              src={listing.image}
-              className="w-full h-full object-cover"
-              muted
-              playsInline
-              preload="metadata"
-              onMouseOver={e => (e.currentTarget as HTMLVideoElement).play()}
-              onMouseOut={e => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
-            />
+            <VideoThumb src={listing.image} />
           ) : (
             <LazyImage
               src={listing.image}
