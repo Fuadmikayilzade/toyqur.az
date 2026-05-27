@@ -25,14 +25,6 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-const getDbRole = async (userId: string): Promise<AppRole | null> => {
-  const { data } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
-  return (data?.[0]?.role as AppRole) ?? null;
-};
-
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -40,59 +32,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [role, setRole] = useState<AppRole | null>(null);
   const [profile, setProfile] = useState<AuthContextType["profile"]>(null);
 
-  const loadUserData = async (sessionUser: User, assignVendor = false) => {
-    setUser(sessionUser);
-
-    if (assignVendor) {
-      // Use SECURITY DEFINER RPC function — bypasses RLS
-      const { error } = await supabase.rpc("assign_vendor_role", {
-        p_user_id: sessionUser.id,
-      });
-      if (error) console.error("assign_vendor_role error:", error.message);
-      // Clear URL param
-      window.history.replaceState({}, "", window.location.origin);
+  const fetchUserData = async (userId: string) => {
+    try {
+      const [{ data: roles }, { data: prof }] = await Promise.all([
+        supabase.from("user_roles").select("role").eq("user_id", userId),
+        supabase.from("profiles").select("full_name, phone, avatar_url").eq("user_id", userId).single(),
+      ]);
+      setRole((roles?.[0]?.role as AppRole) ?? "user");
+      setProfile(prof ?? null);
+    } catch {
+      setRole("user");
+      setProfile(null);
     }
-
-    const [dbRole, profResult] = await Promise.all([
-      getDbRole(sessionUser.id),
-      supabase.from("profiles").select("full_name, phone, avatar_url").eq("user_id", sessionUser.id).single(),
-    ]);
-
-    setRole(dbRole ?? "user");
-    setProfile(profResult.data ?? null);
   };
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const isGoogleVendor = urlParams.get("google_vendor") === "1";
-
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setUser(session?.user ?? null);
       if (session?.user) {
-        await loadUserData(session.user, isGoogleVendor);
-      }
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        if (session?.user) {
-          const params = new URLSearchParams(window.location.search);
-          const vendorParam = params.get("google_vendor") === "1";
-          if (event === "SIGNED_IN") {
-            await loadUserData(session.user, vendorParam);
-          } else {
-            await loadUserData(session.user, false);
-          }
-        } else if (!session) {
-          setUser(null);
-          setRole(null);
-          setProfile(null);
-        }
+        fetchUserData(session.user.id).finally(() => setLoading(false));
+      } else {
         setLoading(false);
       }
-    );
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserData(session.user.id);
+      } else {
+        setRole(null);
+        setProfile(null);
+      }
+    });
 
     return () => subscription.unsubscribe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
