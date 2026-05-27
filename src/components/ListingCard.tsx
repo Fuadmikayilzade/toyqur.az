@@ -43,51 +43,29 @@ const firstMedia = (images?: string[] | null) => {
 };
 
 
-// iOS-safe video thumbnail — draws first frame via canvas
+// Video thumbnail — works on iOS, Android and Web
 const VideoThumb = ({ src }: { src: string }) => {
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  const [ready, setReady] = React.useState(false);
-
-  React.useEffect(() => {
-    const video = document.createElement("video");
-    video.src = src;
-    video.crossOrigin = "anonymous";
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "metadata";
-
-    const draw = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 360;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      setReady(true);
-      video.remove();
-    };
-
-    video.addEventListener("loadeddata", () => {
-      video.currentTime = 0.1;
-    });
-    video.addEventListener("seeked", draw);
-    video.addEventListener("error", () => setReady(true)); // show placeholder on error
-    video.load();
-  }, [src]);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const [hasFrame, setHasFrame] = React.useState(false);
 
   return (
-    <div className="w-full h-full relative flex items-center justify-center"
-      style={{ background: "hsl(25 28% 88%)" }}>
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full object-cover"
-        style={{ display: ready ? "block" : "none" }}
-      />
-      {!ready && (
+    <div className="w-full h-full relative" style={{ background: "hsl(25 28% 88%)" }}>
+      {!hasFrame && (
         <div className="absolute inset-0 animate-pulse"
           style={{ background: "linear-gradient(110deg, hsl(25 26% 91%) 40%, hsl(25 26% 87%) 50%, hsl(25 26% 91%) 60%)" }} />
       )}
+      <video
+        ref={videoRef}
+        src={`${src}#t=0.1`}
+        className="w-full h-full object-cover"
+        muted
+        playsInline
+        preload="metadata"
+        onLoadedData={() => setHasFrame(true)}
+        onMouseOver={() => videoRef.current?.play()}
+        onMouseOut={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
+        style={{ opacity: hasFrame ? 1 : 0 }}
+      />
       {/* Play icon overlay */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="w-12 h-12 rounded-full flex items-center justify-center"
