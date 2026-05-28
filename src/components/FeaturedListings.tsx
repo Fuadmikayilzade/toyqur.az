@@ -100,9 +100,10 @@ const HorizontalSlider = ({ title, items, catId }: { title: string; items: Servi
         {canLeft && (
           <button
             onClick={() => scroll("left")}
-            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 w-10 h-10 rounded-full bg-card border border-border shadow-md flex items-center justify-center hover:border-primary/40 transition-all opacity-0 group-hover:opacity-100"
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition-all"
+            style={{ background: "hsl(16 38% 38%)", boxShadow: "0 2px 12px hsl(16 38% 30%/0.4)" }}
           >
-            <ChevronLeft className="w-4 h-4 text-foreground" />
+            <ChevronLeft className="w-4 h-4 text-white" />
           </button>
         )}
 
@@ -110,9 +111,10 @@ const HorizontalSlider = ({ title, items, catId }: { title: string; items: Servi
         {canRight && (
           <button
             onClick={() => scroll("right")}
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 w-10 h-10 rounded-full bg-card border border-border shadow-md flex items-center justify-center hover:border-primary/40 transition-all opacity-0 group-hover:opacity-100"
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition-all"
+            style={{ background: "hsl(16 38% 38%)", boxShadow: "0 2px 12px hsl(16 38% 30%/0.4)" }}
           >
-            <ChevronRight className="w-4 h-4 text-foreground" />
+            <ChevronRight className="w-4 h-4 text-white" />
           </button>
         )}
 
@@ -157,6 +159,20 @@ const FeaturedListings = () => {
     (s) => !["wedding-hall", "banquet-hall"].includes(s.category)
   );
 
+  // Group other services by category, preserve insertion order
+  const otherByCategory = (() => {
+    const map = new Map<string, ServiceItem[]>();
+    for (const s of otherServices) {
+      if (!map.has(s.category)) map.set(s.category, []);
+      map.get(s.category)!.push(s);
+    }
+    return Array.from(map.entries()).map(([catId, items]) => ({
+      catId,
+      title: t(`cat.${catId}`) || catId,
+      items,
+    }));
+  })();
+
   if (loading) {
     return (
       <section className="py-16 md:py-24 bg-secondary/30">
@@ -192,7 +208,9 @@ const FeaturedListings = () => {
 
         <HorizontalSlider title={t("cat.wedding-hall")} items={weddingHallServices} catId="wedding-hall" />
         <HorizontalSlider title={t("cat.banquet-hall")} items={banquetHallServices} catId="banquet-hall" />
-        <HorizontalSlider title={t("sliderOther")} items={otherServices} catId="decoration" />
+        {otherByCategory.map(({ catId, title, items }) => (
+          <HorizontalSlider key={catId} title={title} items={items} catId={catId} />
+        ))}
       </div>
     </section>
   );

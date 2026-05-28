@@ -1,7 +1,7 @@
 import { useSEO } from "@/hooks/useSEO";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Heart, Star, MapPin, Phone, Share2, MessageCircle, Play, ExternalLink, Calendar, CheckCircle, Store, Instagram, Eye } from "lucide-react";
-import { useState, useEffect } from "react";
+import { ArrowLeft, Heart, Star, MapPin, Phone, Share2, MessageCircle, Play, ExternalLink, Calendar, CheckCircle, Store, Instagram, Eye, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import type { Tables } from "@/integrations/supabase/types";
 import Footer from "@/components/Footer";
@@ -74,6 +74,71 @@ const formatPrice = (min: number | null, max: number | null) => {
     : `min ₼${min.toLocaleString()}`;
 };
 
+// ── Horizontal slider for related/mixed services ──
+const DetailSlider = ({ title, items, accentColor = "hsl(16 38% 48%)" }: {
+  title: string;
+  items: Array<{ id: string; title: string; category: string; location: string | null; price_min: number | null; price_max: number | null; rating: number | null; review_count: number | null; images: string[] | null; description: string | null }>;
+  accentColor?: string;
+}) => {
+  const { t } = useLanguage();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(true);
+
+  const updateArrows = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 8);
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+  };
+  const scroll = (dir: "left" | "right") => {
+    scrollRef.current?.scrollBy({ left: dir === "left" ? -300 : 300, behavior: "smooth" });
+  };
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="mb-10">
+      <h2 className="text-lg font-serif font-bold text-foreground mb-5 flex items-center gap-2">
+        <span className="w-1 h-5 rounded-full inline-block" style={{ background: accentColor }} />
+        {title}
+      </h2>
+      <div className="relative group">
+        {canLeft && (
+          <button onClick={() => scroll("left")}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+            style={{ background: "hsl(16 38% 38%)" }}>
+            <ChevronLeft className="w-4 h-4 text-white" />
+          </button>
+        )}
+        {canRight && (
+          <button onClick={() => scroll("right")}
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+            style={{ background: "hsl(16 38% 38%)" }}>
+            <ChevronRight className="w-4 h-4 text-white" />
+          </button>
+        )}
+        <div ref={scrollRef} onScroll={updateArrows}
+          className="flex gap-4 overflow-x-auto pb-3 snap-x snap-mandatory"
+          style={{ scrollbarWidth: "none" }}>
+          {items.map(s => (
+            <div key={s.id} className="w-[260px] flex-shrink-0 snap-start">
+              <ListingCard listing={{
+                id: s.id, title: s.title, category: s.category,
+                location: s.location || "",
+                priceRange: s.price_min ? (s.price_max ? `min ₼${s.price_min} — max ₼${s.price_max}` : `min ₼${s.price_min}`) : t("askPrice"),
+                rating: s.rating || 0, reviewCount: s.review_count || 0,
+                image: firstImage(s.images), vendor: "", featured: false,
+                description: s.description || "", images: s.images || [],
+              }} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ListingDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
@@ -140,17 +205,15 @@ const ListingDetail = () => {
       .eq("category", service.category)
       .eq("is_approved", true)
       .neq("id", service.id)
-      .limit(4)
       .then(({ data }) => setSimilarServices(data || []));
 
     // Mixed: other categories, exclude venues, exclude current category
     supabase.from("services").select("*")
       .eq("is_approved", true)
       .neq("id", service.id)
-      .limit(12)
       .then(({ data }) => {
         const filtered = (data || []).filter(s => !excludeCats.includes(s.category));
-        setMixedServices(filtered.slice(0, 6));
+        setMixedServices(filtered);
       });
   }, [service]);
 
@@ -692,55 +755,48 @@ const ListingDetail = () => {
         />
       )}
 
-      {/* Similar products */}
+      {/* Similar products — slider */}
       {similarServices.length > 0 && (
-        <div className="pb-10" style={{ background: "hsl(28 38% 98%)" }}>
+        <div className="pb-6" style={{ background: "hsl(28 38% 98%)" }}>
           <div className="container mx-auto px-4">
-            <h2 className="text-lg font-serif font-bold text-foreground mb-5 flex items-center gap-2">
-              <span className="w-1 h-5 rounded-full inline-block" style={{ background: "hsl(16 38% 48%)" }} />
-              {t(`cat.${service?.category}`) || categories.find(c => c.id === service?.category)?.name} — {t("similarProducts")}
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {similarServices.map(s => (
-                <ListingCard key={s.id} listing={{
-                  id: s.id, title: s.title, category: s.category,
-                  location: s.location || "",
-                  priceRange: s.price_min ? (s.price_max ? `min ₼${s.price_min} — max ₼${s.price_max}` : `min ₼${s.price_min}`) : t("askPrice"),
-                  rating: s.rating || 0, reviewCount: s.review_count || 0,
-                  image: firstImage(s.images),
-                  vendor: "", featured: false,
-                  description: s.description || "", images: s.images || [],
-                }} />
-              ))}
-            </div>
+            <DetailSlider
+              title={`${t(`cat.${service?.category}`) || categories.find(c => c.id === service?.category)?.name} — ${t("similarProducts")}`}
+              items={similarServices}
+              accentColor="hsl(16 38% 48%)"
+            />
           </div>
         </div>
       )}
 
-      {/* Mixed products */}
-      {mixedServices.length > 0 && (
-        <div className="pb-16" style={{ background: "hsl(28 38% 98%)" }}>
-          <div className="container mx-auto px-4">
-            <h2 className="text-lg font-serif font-bold text-foreground mb-5 flex items-center gap-2">
-              <span className="w-1 h-5 rounded-full inline-block" style={{ background: "hsl(25 35% 65%)" }} />
-              {t("otherProducts")}
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {mixedServices.map(s => (
-                <ListingCard key={s.id} listing={{
-                  id: s.id, title: s.title, category: s.category,
-                  location: s.location || "",
-                  priceRange: s.price_min ? (s.price_max ? `min ₼${s.price_min} — max ₼${s.price_max}` : `min ₼${s.price_min}`) : "Qiymət soruşun",
-                  rating: s.rating || 0, reviewCount: s.review_count || 0,
-                  image: firstImage(s.images),
-                  vendor: "", featured: false,
-                  description: s.description || "", images: s.images || [],
-                }} />
+      {/* Mixed products — grouped by category, each as slider */}
+      {mixedServices.length > 0 && (() => {
+        const map = new Map<string, typeof mixedServices>();
+        for (const s of mixedServices) {
+          if (!map.has(s.category)) map.set(s.category, []);
+          map.get(s.category)!.push(s);
+        }
+        const ordered = categories
+          .filter(c => map.has(c.id))
+          .map(c => ({ catId: c.id, items: map.get(c.id)! }));
+        const inList = new Set(ordered.map(o => o.catId));
+        for (const [catId, items] of map.entries()) {
+          if (!inList.has(catId)) ordered.push({ catId, items });
+        }
+        return (
+          <div className="pb-16" style={{ background: "hsl(28 38% 98%)" }}>
+            <div className="container mx-auto px-4">
+              {ordered.map(({ catId, items }) => (
+                <DetailSlider
+                  key={catId}
+                  title={t(`cat.${catId}`) || catId}
+                  items={items}
+                  accentColor="hsl(25 35% 65%)"
+                />
               ))}
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <Footer />
     </div>

@@ -2,7 +2,6 @@ import { useSEO } from "@/hooks/useSEO";
 import Navbar from "@/components/Navbar";
 import { useLanguage } from "@/contexts/LanguageContext";
 import HeroSlider from "@/components/HeroSlider";
-import CategoryGrid from "@/components/CategoryGrid";
 import FeaturedListings from "@/components/FeaturedListings";
 import Testimonials from "@/components/Testimonials";
 import CTASection from "@/components/CTASection";
@@ -21,7 +20,6 @@ const Index = () => {
       <Navbar />
       <HeroSlider />
       <FeaturedListings />
-      <CategoryGrid />
       <Testimonials />
 
       {/* Professional Support Banner */}
@@ -53,7 +51,16 @@ const Index = () => {
       <CTASection />
       <Footer />
 
-
+      {/* Floating WhatsApp button */}
+      <a
+        href={`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent("Salam sizə toyqur.az saytından müraciət edirəm")}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-[hsl(142,70%,45%)] text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
+        aria-label="WhatsApp"
+      >
+        <MessageCircle className="w-6 h-6" />
+      </a>
     </div>
   );
 };

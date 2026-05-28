@@ -45,14 +45,18 @@ const Navbar = () => {
                   </Button>
                 )}
                 {role === "vendor" && (
-                  <Button variant="ghost" size="sm" className="text-foreground/70" asChild>
+                  <Button size="sm" asChild
+                    className="text-white font-semibold"
+                    style={{ background: "linear-gradient(135deg, hsl(16 38% 40%) 0%, hsl(20 45% 30%) 100%)", border: "none" }}>
                     <Link to="/vendor"><LayoutDashboard className="w-4 h-4 mr-1" />{t("dashboard")}</Link>
                   </Button>
                 )}
                 <Button variant="ghost" size="sm" className="text-foreground/70" asChild>
                   <Link to="/favorites"><Heart className="w-4 h-4 mr-1" />{t("favorites")}</Link>
                 </Button>
-                <Button variant="ghost" size="sm" className="text-foreground/70" asChild>
+                <Button size="sm" asChild
+                  className="font-semibold"
+                  style={{ background: "hsl(25 30% 90%)", color: "hsl(20 20% 20%)", border: "1px solid hsl(25 28% 80%)" }}>
                   <Link to="/profile"><UserCircle className="w-4 h-4 mr-1" />{profile?.full_name || t("profile")}</Link>
                 </Button>
                 <Button variant="outline" size="sm" onClick={handleSignOut}>

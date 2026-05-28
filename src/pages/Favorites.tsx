@@ -51,6 +51,9 @@ const cardStyle = {
   boxShadow: "0 1px 4px hsl(25 18% 78% / 0.28)",
 };
 
+const isVideoUrl = (url: string) => /\.(mp4|mov|webm|avi|mkv)(\?|$)/i.test(url);
+
+
 const Favorites = () => {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -160,16 +163,32 @@ const Favorites = () => {
                           className="absolute inset-0 animate-pulse"
                           style={{ background: "hsl(25 26% 90%)", zIndex: 0 }}
                         />
-                        <img
-                          src={svc.images?.[0] || "/placeholder.svg"}
-                          alt={svc.title}
-                          className="relative z-10 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          loading="lazy"
-                          onLoad={(e) => {
-                            const prev = (e.target as HTMLImageElement).previousElementSibling as HTMLElement;
-                            if (prev) prev.style.display = "none";
-                          }}
-                        />
+                        {svc.images?.[0] && isVideoUrl(svc.images[0]) ? (
+                          <video
+                            src={svc.images[0]}
+                            className="relative z-10 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            muted
+                            playsInline
+                            preload="metadata"
+                            onLoadedMetadata={(e) => {
+                              const v = e.currentTarget;
+                              if (v.duration > 0) v.currentTime = Math.min(0.5, v.duration * 0.05);
+                              const prev = v.previousElementSibling as HTMLElement;
+                              if (prev) prev.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <img
+                            src={svc.images?.[0] || "/placeholder.svg"}
+                            alt={svc.title}
+                            className="relative z-10 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            loading="lazy"
+                            onLoad={(e) => {
+                              const prev = (e.target as HTMLImageElement).previousElementSibling as HTMLElement;
+                              if (prev) prev.style.display = "none";
+                            }}
+                          />
+                        )}
                       </div>
                       <div className="p-4">
                         <h3 className="font-serif font-semibold text-foreground mb-1 group-hover:text-primary transition-colors leading-snug">

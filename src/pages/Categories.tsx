@@ -1,9 +1,9 @@
 import { useSEO } from "@/hooks/useSEO";
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import {
   Search, SlidersHorizontal, X, ChevronDown, MapPin,
-  Users, Banknote, ArrowUpDown, Star, Clock, TrendingUp, Heart
+  Users, Banknote, ArrowUpDown, Star, Clock, TrendingUp, Heart, ChevronLeft, ChevronRight
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -85,6 +85,70 @@ const EmptyState = ({ hasFilters, onClear }: { hasFilters: boolean; onClear: () 
           {t("goHome")}
         </a>
       )}
+    </div>
+  );
+};
+
+// ── Category slider for "Hamısı" view ──
+interface SliderItem {
+  id: string; title: string; category: string; location: string | null;
+  price_min: number | null; price_max: number | null; rating: number | null;
+  review_count: number | null; images: string[] | null; description: string | null;
+  vendor_profiles?: { brand_name: string | null; brand_logo: string | null } | null;
+}
+
+const AllCatSlider = ({ catId, title, items, toFormat }: {
+  catId: string; title: string; items: SliderItem[];
+  toFormat: (s: SliderItem) => Parameters<typeof ListingCard>[0]["listing"];
+}) => {
+  const { t } = useLanguage();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(true);
+  const updateArrows = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanLeft(el.scrollLeft > 8);
+    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+  };
+  const scroll = (dir: "left" | "right") => {
+    scrollRef.current?.scrollBy({ left: dir === "left" ? -300 : 300, behavior: "smooth" });
+  };
+  return (
+    <div className="mb-12">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="text-xl font-serif font-bold text-foreground">{title}</h3>
+        <Link to={`/categories?cat=${catId}`}
+          className="text-sm font-medium transition-opacity hover:opacity-70 flex-shrink-0 ml-4"
+          style={{ color: "hsl(16 38% 48%)" }}>
+          {t("seeAll")} →
+        </Link>
+      </div>
+      <div className="relative group">
+        {canLeft && (
+          <button onClick={() => scroll("left")}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+            style={{ background: "hsl(16 38% 38%)" }}>
+            <ChevronLeft className="w-4 h-4 text-white" />
+          </button>
+        )}
+        {canRight && (
+          <button onClick={() => scroll("right")}
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+            style={{ background: "hsl(16 38% 38%)" }}>
+            <ChevronRight className="w-4 h-4 text-white" />
+          </button>
+        )}
+        <div ref={scrollRef} onScroll={updateArrows}
+          className="flex gap-5 overflow-x-auto pb-4 snap-x snap-mandatory"
+          style={{ scrollbarWidth: "none" }}>
+          {items.map(s => (
+            <div key={s.id} className="w-[270px] flex-shrink-0 snap-start">
+              <ListingCard listing={toFormat(s)} />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
@@ -467,16 +531,45 @@ const Categories = () => {
               {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
             </div>
           ) : filtered.length > 0 ? (
-            <>
-              <p className="text-xs text-muted-foreground mb-4">
-                {filtered.length} {t("services")} · {currentSort.label}
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filtered.map((s) => (
-                  <ListingCard key={s.id} listing={toListingFormat(s)} />
-                ))}
-              </div>
-            </>
+            !selectedCat ? (
+              // "Hamısı" — show per-category sliders in categories order
+              (() => {
+                const map = new Map<string, typeof filtered>();
+                for (const s of filtered) {
+                  if (!map.has(s.category)) map.set(s.category, []);
+                  map.get(s.category)!.push(s);
+                }
+                // Sort by categories array order
+                const ordered = categories
+                  .filter(c => map.has(c.id))
+                  .map(c => ({ catId: c.id, items: map.get(c.id)! }));
+                // Append any leftover categories not in the list
+                const inList = new Set(ordered.map(o => o.catId));
+                for (const [catId, items] of map.entries()) {
+                  if (!inList.has(catId)) ordered.push({ catId, items });
+                }
+                return ordered.map(({ catId, items }) => (
+                  <AllCatSlider
+                    key={catId}
+                    catId={catId}
+                    title={t(`cat.${catId}`) || catId}
+                    items={items}
+                    toFormat={toListingFormat}
+                  />
+                ));
+              })()
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground mb-4">
+                  {filtered.length} {t("services")} · {currentSort.label}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filtered.map((s) => (
+                    <ListingCard key={s.id} listing={toListingFormat(s)} />
+                  ))}
+                </div>
+              </>
+            )
           ) : (
             <EmptyState hasFilters={hasActiveFilters} onClear={clearFilters} />
           )}
