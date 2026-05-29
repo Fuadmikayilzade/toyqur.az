@@ -194,16 +194,13 @@ const FeaturedListings = () => {
   return (
     <section className="py-16 md:py-24 bg-secondary/30">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-12">
-          <p className="text-xs uppercase tracking-[0.2em] font-medium mb-3" style={{ color: "hsl(15 30% 55%)" }}>
+        <div className="text-center mb-10">
+          <p className="text-xs uppercase tracking-[0.2em] font-medium mb-2" style={{ color: "hsl(15 30% 55%)" }}>
             {t("featuredOn")}
           </p>
-          <h2 className="text-3xl md:text-4xl font-serif font-bold text-foreground mb-3">
+          <h2 className="text-2xl md:text-3xl font-serif font-bold text-foreground">
             {t("featuredTitle")}
           </h2>
-          <p className="text-muted-foreground max-w-lg mx-auto">
-            {t("featuredSub")}
-          </p>
         </div>
 
         <HorizontalSlider title={t("cat.wedding-hall")} items={weddingHallServices} catId="wedding-hall" />

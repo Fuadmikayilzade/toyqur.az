@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Heart, Menu, X, LogOut, LayoutDashboard, Shield, Headphones, UserCircle } from "lucide-react";
+import { Heart, ChevronDown, Menu, X, LogOut, LayoutDashboard, Shield, Headphones, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { categories } from "@/data/mockData";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,7 +28,55 @@ const Navbar = () => {
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-8">
             <Link to="/" className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors">{t("home")}</Link>
-            <Link to="/categories" className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors">{t("categories")}</Link>
+            {/* Categories mega menu */}
+            <div className="relative group">
+              <Link to="/categories" className="flex items-center gap-1 text-sm font-medium text-foreground/70 hover:text-primary transition-colors py-2">
+                {t("categories")}
+                <ChevronDown className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-180" />
+              </Link>
+
+              {/* Mega dropdown */}
+              <div
+                className="absolute top-full left-1/2 -translate-x-1/2 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50"
+                style={{ minWidth: 560 }}
+              >
+                <div
+                  className="rounded-2xl p-5 shadow-xl"
+                  style={{
+                    background: "hsl(30 42% 99%)",
+                    border: "1px solid hsl(25 28% 88%)",
+                    boxShadow: "0 8px 40px hsl(20 18% 60% / 0.18)",
+                  }}
+                >
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    {categories.map((cat) => (
+                      <Link
+                        key={cat.id}
+                        to={`/categories?cat=${cat.id}`}
+                        className="flex items-center px-3 py-2 rounded-xl transition-all duration-150 hover:bg-opacity-80"
+                        style={{
+                          background: "hsl(28 35% 95%)",
+                          border: "1px solid hsl(25 26% 89%)",
+                        }}
+                      >
+                        <span className="text-xs font-medium leading-tight truncate" style={{ color: "hsl(20 20% 25%)" }}>
+                          {t(`cat.${cat.id}`) || cat.name}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                  <div className="pt-3 border-t" style={{ borderColor: "hsl(25 26% 90%)" }}>
+                    <Link
+                      to="/categories"
+                      className="flex items-center justify-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-70"
+                      style={{ color: "hsl(16 38% 44%)" }}
+                    >
+                      Bütün kateqoriyalara bax →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
             <Link to="/about" className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors">{t("about")}</Link>
             <Link to="/blog" className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors">Blog</Link>
             <Link to="/contact" className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors">{t("contact")}</Link>

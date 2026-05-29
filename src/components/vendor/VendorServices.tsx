@@ -12,6 +12,8 @@ import { categories } from "@/data/mockData";
 
 type Service = Tables<"services">;
 
+const isVideoUrl = (url: string) => /\.(mp4|mov|webm|avi|mkv)(\?|$)/i.test(url);
+
 const formatDate = (iso: string) => {
   const d = new Date(iso);
   const dd = String(d.getDate()).padStart(2, "0");
@@ -146,7 +148,19 @@ const VendorServices = ({ profileComplete = true }: VendorServicesProps) => {
               <div key={service.id} className="rounded-2xl overflow-hidden" style={cardStyle}>
                 <div className="aspect-[16/10] relative" style={{ background: "hsl(25 28% 91%)" }}>
                   {service.images && service.images.length > 0 ? (
-                    <img src={service.images[0]} alt={service.title} className="w-full h-full object-cover" />
+                    isVideoUrl(service.images[0]) ? (
+                      <video
+                        src={service.images[0]}
+                        className="w-full h-full object-cover"
+                        muted playsInline preload="metadata"
+                        onLoadedMetadata={(e) => {
+                          const v = e.currentTarget;
+                          if (v.duration > 0) v.currentTime = Math.min(0.5, v.duration * 0.05);
+                        }}
+                      />
+                    ) : (
+                      <img src={service.images[0]} alt={service.title} className="w-full h-full object-cover" />
+                    )
                   ) : (
                     <div className="flex items-center justify-center h-full">
                       <ImageIcon className="w-10 h-10 text-muted-foreground" />

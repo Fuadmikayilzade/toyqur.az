@@ -74,8 +74,23 @@ const VideoThumb = ({ src }: { src: string }) => {
         preload="metadata"
         onLoadedMetadata={handleLoaded}
         onSeeked={handleSeeked}
-        onMouseOver={() => videoRef.current?.play()}
-        onMouseOut={() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } }}
+        onMouseOver={() => {
+          const v = videoRef.current;
+          if (!v) return;
+          const p = v.play();
+          if (p !== undefined) p.catch(() => {});
+        }}
+        onMouseOut={() => {
+          const v = videoRef.current;
+          if (!v) return;
+          // Wait for play to resolve before pausing
+          const p = v.play();
+          if (p !== undefined) {
+            p.then(() => { v.pause(); v.currentTime = 0; }).catch(() => {});
+          } else {
+            v.pause(); v.currentTime = 0;
+          }
+        }}
         style={{ opacity: hasFrame ? 1 : 0, transition: "opacity 0.3s" }}
       />
       {/* Play icon overlay */}
@@ -213,7 +228,7 @@ const ListingCard = ({ listing }: { listing: Listing }) => {
             <div
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl"
               style={{
-                background: "linear-gradient(135deg, hsl(44, 69%, 56%) 0%, hsl(20 45% 28%) 100%)",
+                background: "linear-gradient(135deg, hsl(50, 73%, 58%) 0%, hsl(20 45% 28%) 100%)",
                 boxShadow: "0 2px 10px hsl(16 38% 30% / 0.5)",
               }}
             >
@@ -241,7 +256,7 @@ const ListingCard = ({ listing }: { listing: Listing }) => {
             />
           )}
           <h3
-            className="font-serif font-bold transition-colors group-hover:text-primary leading-snug text-xl"
+            className="font-serif font-bold transition-colors group-hover:text-primary leading-snug text-lg"
             style={{ color: "hsl(20 20% 10%)" }}
           >
             {listing.title}

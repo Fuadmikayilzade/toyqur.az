@@ -206,7 +206,7 @@ const Auth = () => {
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input type="text" value={fullName} onChange={e => setFullName(e.target.value)}
-                  className={inputCls} style={inputStyle} placeholder={t("fullName")} required />
+                  className={inputCls} style={inputStyle} placeholder={t("fullName")} autoComplete="name" required />
               </div>
             )}
 
@@ -249,7 +249,7 @@ const Auth = () => {
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                      className={inputCls} style={inputStyle} placeholder={t("email")} required />
+                      className={inputCls} style={inputStyle} placeholder={t("email")} autoComplete="email" required />
                   </div>
                 ) : null}
 
@@ -264,6 +264,7 @@ const Auth = () => {
                         className={`${inputCls} pr-10`}
                         style={inputStyle}
                         placeholder={t("password")}
+                        autoComplete={mode === "login" ? "current-password" : "new-password"}
                         required
                       />
                       <button type="button" onClick={() => setShowPassword(v => !v)}

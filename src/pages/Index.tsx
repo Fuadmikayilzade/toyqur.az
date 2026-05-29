@@ -3,6 +3,7 @@ import Navbar from "@/components/Navbar";
 import { useLanguage } from "@/contexts/LanguageContext";
 import HeroSlider from "@/components/HeroSlider";
 import FeaturedListings from "@/components/FeaturedListings";
+import CategoryBar from "@/components/CategoryBar";
 import Testimonials from "@/components/Testimonials";
 import CTASection from "@/components/CTASection";
 import Footer from "@/components/Footer";
@@ -20,6 +21,7 @@ const Index = () => {
       <Navbar />
       <HeroSlider />
       <FeaturedListings />
+      <CategoryBar />
       <Testimonials />
 
       {/* Professional Support Banner */}
