@@ -228,7 +228,7 @@ const ListingCard = ({ listing }: { listing: Listing }) => {
             <div
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl"
               style={{
-                background: "linear-gradient(135deg, hsl(50, 73%, 58%) 0%, hsl(20 45% 28%) 100%)",
+                background: "linear-gradient(135deg, hsl(45, 88%, 64%) 0%, hsl(20 45% 28%) 100%)",
                 boxShadow: "0 2px 10px hsl(16 38% 30% / 0.5)",
               }}
             >

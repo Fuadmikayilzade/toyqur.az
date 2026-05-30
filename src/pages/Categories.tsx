@@ -286,9 +286,44 @@ const Categories = () => {
   return (
     <div className="min-h-screen">
       <Navbar />
-      {/* SEO meta handled via document.title below */}
-      <div className="pt-24 pb-16">
+      {/* Sticky chip bar — mobile only */}
+      <div className="fixed left-0 right-0 z-40 md:hidden" style={{ top: "64px", background: "hsl(28 40% 98% / 0.95)", backdropFilter: "blur(14px)", borderBottom: "1px solid hsl(25 28% 88%)" }}>
+        <div className="flex items-center gap-2 px-4 py-2.5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <button onClick={() => handleCatChange("")} className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap" style={!selectedCat ? { background: "hsl(16 38% 42%)", color: "#fff" } : { background: "hsl(28 35% 93%)", color: "hsl(20 18% 42%)", border: "1px solid hsl(25 28% 85%)" }}>✦ Hamısı</button>
+          <div className="w-px h-4 flex-shrink-0" style={{ background: "hsl(25 28% 84%)" }} />
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => handleCatChange(cat.id === selectedCat ? "" : cat.id)}
+              className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap"
+              style={selectedCat === cat.id
+                ? { background: "hsl(16 38% 42%)", color: "#fff" }
+                : { background: "hsl(28 35% 93%)", color: "hsl(20 18% 42%)", border: "1px solid hsl(25 28% 85%)" }}>
+              {t(`cat.${cat.id}`) || cat.name}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* SEO meta */}
+      <div className="pt-36 md:pt-28 pb-16">
         <div className="container mx-auto px-4">
+          <div className="flex gap-8 items-start">
+          <div className="hidden md:block w-48 flex-shrink-0 sticky top-32">
+            <p className="text-xs uppercase tracking-widest font-semibold mb-3" style={{ color: "hsl(20 15% 58%)" }}>Kateqoriyalar</p>
+            <div className="space-y-0.5">
+              <button onClick={() => handleCatChange("")} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left"
+                style={!selectedCat ? { background: "hsl(16 38% 42%)", color: "#fff" } : { color: "hsl(20 18% 38%)" }}>✦ Hamısı</button>
+              {categories.map((cat) => (
+                <button key={cat.id} onClick={() => handleCatChange(cat.id === selectedCat ? "" : cat.id)}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left hover:bg-black/5"
+                  style={selectedCat === cat.id ? { background: "hsl(16 38% 42%)", color: "#fff" } : { color: "hsl(20 18% 38%)" }}>
+                  <span className="text-base w-5 text-center">{cat.emoji}</span>
+                  <span className="truncate">{t(`cat.${cat.id}`) || cat.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl md:text-4xl font-serif font-bold text-foreground mb-1">
@@ -573,6 +608,8 @@ const Categories = () => {
           ) : (
             <EmptyState hasFilters={hasActiveFilters} onClear={clearFilters} />
           )}
+          </div>
+          </div>
         </div>
       </div>
       <Footer />
