@@ -1,802 +1,697 @@
-import { useSEO } from "@/hooks/useSEO";
-import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Heart, Star, MapPin, Phone, Share2, MessageCircle, Play, ExternalLink, Calendar, CheckCircle, Store, Instagram, Eye, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
-import Navbar from "@/components/Navbar";
-import type { Tables } from "@/integrations/supabase/types";
-import Footer from "@/components/Footer";
-import ImageLightbox from "@/components/ImageLightbox";
-import ListingCard from "@/components/ListingCard";
+import { useState } from "react";
+import { ArrowLeft, Upload, X, ChevronDown, Play, MapPin, ExternalLink, Instagram, Image } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useLanguage } from "@/contexts/LanguageContext";
 import { toast } from "sonner";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { categories } from "@/data/mockData";
+import { cities, bakuDistricts, isVenueCategory, venueAmenities, cuisineTypes } from "@/data/locations";
+import type { Tables } from "@/integrations/supabase/types";
 
-// Returns first media (image or video) — whatever was uploaded first
-const firstImage = (images?: string[] | null): string => images?.[0] || "/placeholder.svg";
+type Service = Tables<"services">;
 
+interface ServiceFormProps {
+  service?: Service | null;
+  onClose: () => void;
+  onSaved: () => void;
+}
 
-const isVideoFile = (url: string) => {
-  const ext = url.split(".").pop()?.toLowerCase() || "";
-  return ["mp4", "mov", "webm", "avi"].includes(ext);
-};
+// Kateqoriyalar — min/max qiymət göstərilsin
+const MIN_MAX_PRICE_CATEGORIES = [
+  "wedding-hall", "banquet-hall",
+  "photographer", "videographer", "mobilograf",
+  "dj", "singer", "dance-group", "bride-assistant",
+];
 
+// Kateqoriyalar — şəhər/rayon göstərilsin
+const LOCATION_CATEGORIES = [
+  "wedding-hall", "banquet-hall",
+  "buket", "gelinlik-buketi", "xonca",
+  "car", "dress", "groom-suit", "beauty-salon",
+];
+
+// Kateqoriyalar — Google Maps ünvan göstərilsin
+const ADDRESS_CATEGORIES = ["wedding-hall", "banquet-hall", "dress", "car"];
+
+// Kateqoriyalar — menyu şəkilləri yükləmə
+const VENUE_MENU_CATEGORIES = ["wedding-hall", "banquet-hall"];
+
+const isBrideAssistant = (cat: string) => cat === "bride-assistant";
+const needsMinMax = (cat: string) => MIN_MAX_PRICE_CATEGORIES.includes(cat);
+const needsLocation = (cat: string) => LOCATION_CATEGORIES.includes(cat);
+const needsAddress = (cat: string) => ADDRESS_CATEGORIES.includes(cat);
+const needsMenu = (cat: string) => VENUE_MENU_CATEGORIES.includes(cat);
+
+const isVideoFile = (url: string) => ["mp4", "mov", "webm", "avi"].includes(url.split(".").pop()?.toLowerCase() || "");
+
+// ── Meta parse/build ──────────────────────────────────────────────────────────
 const parseServiceMeta = (desc: string | null) => {
-  if (!desc) return { cleanDesc: "", phones: [], address: "", logoUrl: "", instagram: "", district: "", capacity: "", amenities: [] as string[], cuisines: [] as string[], whatsapp: "" };
+  const empty = { cleanDesc: "", phone1: "", phone2: "", whatsapp: "", address: "", logoUrl: "", instagram: "", district: "", capacity: "", amenities: [] as string[], cuisines: [] as string[], menuImages: [] as string[] };
+  if (!desc) return empty;
   const sepIdx = desc.indexOf("\n---\n");
   const cleanDesc = sepIdx === -1 ? desc : desc.slice(0, sepIdx).trim();
-  if (sepIdx === -1) return { cleanDesc, phones: [], address: "", logoUrl: "", instagram: "", district: "", capacity: "", amenities: [] as string[], cuisines: [] as string[], whatsapp: "" };
+  if (sepIdx === -1) return { ...empty, cleanDesc };
   const metaLines = desc.slice(sepIdx + 5).split("\n");
-  const phones: string[] = [];
-  let address = "", logoUrl = "", instagram = "", district = "", capacity = "";
-  let amenities: string[] = [], cuisines: string[] = [];
-  for (const line of metaLines) {
-    if (line.startsWith("Əlaqə")) {
-      const val = line.split(":").slice(1).join(":").trim();
-      if (val) phones.push(val);
-    } else if (line.startsWith("Ünvan:")) {
-      address = line.slice(6).trim();
-    } else if (line.startsWith("Logo:")) {
-      logoUrl = line.slice(5).trim();
-    } else if (line.startsWith("Instagram:")) {
-      instagram = line.slice(10).trim();
-    } else if (line.startsWith("Rayon:")) {
-      district = line.slice(6).trim();
-    } else if (line.startsWith("Tutum:")) {
-      capacity = line.slice(6).trim();
-    } else if (line.startsWith("Xidmətlər:")) {
-      amenities = line.slice(10).trim().split("||").map(s => s.trim()).filter(Boolean);
-    } else if (line.startsWith("Mətbəx:")) {
-      cuisines = line.slice(7).trim().split("||").map(s => s.trim()).filter(Boolean);
-    }
-  }
-  let whatsapp = "";
-  for (const line of metaLines) {
-    if (line.startsWith("WhatsApp:")) { whatsapp = line.slice(9).trim(); break; }
-  }
-  return { cleanDesc, phones, address, logoUrl, instagram, district, capacity, amenities, cuisines, whatsapp };
-};
-
-const formatDate = (iso: string) => {
-  const d = new Date(iso);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yy = String(d.getFullYear()).slice(2);
-  return `${dd}.${mm}.${yy}`;
-};
-
-const formatPrice = (min: number | null, max: number | null) => {
-  if (!min) return "";
-  return max
-    ? `min ₼${min.toLocaleString()} — max ₼${max.toLocaleString()}`
-    : `min ₼${min.toLocaleString()}`;
-};
-
-// ── Horizontal slider for related/mixed services ──
-const DetailSlider = ({ title, items, accentColor = "hsl(16 38% 48%)", viewAllLink }: {
-  title: string;
-  items: Array<{ id: string; title: string; category: string; location: string | null; price_min: number | null; price_max: number | null; rating: number | null; review_count: number | null; images: string[] | null; description: string | null }>;
-  accentColor?: string;
-  viewAllLink?: string;
-}) => {
-  const { t } = useLanguage();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [canLeft, setCanLeft] = useState(false);
-  const [canRight, setCanRight] = useState(true);
-
-  const updateArrows = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setCanLeft(el.scrollLeft > 8);
-    setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 8);
+  const get = (prefix: string) => {
+    const line = metaLines.find((l) => l.startsWith(prefix));
+    return line ? line.slice(prefix.length).trim() : "";
   };
-  const scroll = (dir: "left" | "right") => {
-    scrollRef.current?.scrollBy({ left: dir === "left" ? -300 : 300, behavior: "smooth" });
+  const amenities = get("Xidmətlər:") ? get("Xidmətlər:").split("||").map(s => s.trim()).filter(Boolean) : [];
+  const cuisines   = get("Mətbəx:")   ? get("Mətbəx:").split("||").map(s => s.trim()).filter(Boolean)   : [];
+  return {
+    cleanDesc,
+    phone1: get("Əlaqə 1:"),
+    phone2: get("Əlaqə 2:"),
+    address: get("Ünvan:"),
+    logoUrl: get("Logo:"),
+    instagram: get("Instagram:"),
+    whatsapp: get("WhatsApp:"),
+    district: get("Rayon:"),
+    capacity: get("Tutum:"),
+    capacityMax: get("TutumMax:"),
+    amenities,
+    cuisines,
+    menuImages: get("MenuImages:") ? get("MenuImages:").split("||").map(s => s.trim()).filter(Boolean) : [],
   };
-
-  if (items.length === 0) return null;
-
-  return (
-    <div className="mb-10">
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-lg font-serif font-bold text-foreground flex items-center gap-2">
-          <span className="w-1 h-5 rounded-full inline-block" style={{ background: accentColor }} />
-          {title}
-        </h2>
-        {viewAllLink && (
-          <Link to={viewAllLink}
-            className="text-sm font-medium hover:opacity-70 transition-opacity flex-shrink-0 ml-4"
-            style={{ color: "hsl(16 38% 44%)" }}>
-            Hamısını gör →
-          </Link>
-        )}
-      </div>
-      <div className="relative group">
-        {canLeft && (
-          <button onClick={() => scroll("left")}
-            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
-            style={{ background: "hsl(16 38% 38%)" }}>
-            <ChevronLeft className="w-4 h-4 text-white" />
-          </button>
-        )}
-        {canRight && (
-          <button onClick={() => scroll("right")}
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
-            style={{ background: "hsl(16 38% 38%)" }}>
-            <ChevronRight className="w-4 h-4 text-white" />
-          </button>
-        )}
-        <div ref={scrollRef} onScroll={updateArrows}
-          className="flex gap-4 overflow-x-auto pb-3 snap-x snap-mandatory"
-          style={{ scrollbarWidth: "none" }}>
-          {items.map(s => (
-            <div key={s.id} className="w-[260px] flex-shrink-0 snap-start">
-              <ListingCard listing={{
-                id: s.id, title: s.title, category: s.category,
-                location: s.location || "",
-                priceRange: s.price_min ? (s.price_max ? `min ₼${s.price_min} — max ₼${s.price_max}` : `min ₼${s.price_min}`) : t("askPrice"),
-                rating: s.rating || 0, reviewCount: s.review_count || 0,
-                image: firstImage(s.images), vendor: "", featured: false,
-                description: s.description || "", images: s.images || [],
-              }} />
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
 };
 
-const ListingDetail = () => {
-  const { id } = useParams();
+// ── ServiceForm ───────────────────────────────────────────────────────────────
+const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
   const { user } = useAuth();
-  const { t, lang } = useLanguage();
-  const [service, setService] = useState<Tables<"services"> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [selectedImg, setSelectedImg] = useState(0);
-  const [liked, setLiked] = useState(false);
-  const [favId, setFavId] = useState<string | null>(null);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [similarServices, setSimilarServices] = useState<Tables<"services">[]>([]);
-  const [mixedServices, setMixedServices] = useState<Tables<"services">[]>([]);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [vendorWhatsapp, setVendorWhatsapp] = useState<string | null>(null);
+  const { t } = useLanguage();
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [menuUploading, setMenuUploading] = useState(false);
 
-  // SEO — uses service state (null until loaded, updates when service loads)
-  useSEO({
-    title: service?.title,
-    description: service?.description
-      ? service.description.slice(0, service.description.indexOf("\n---\n") > -1
-          ? service.description.indexOf("\n---\n")
-          : 155).trim().slice(0, 155)
-      : undefined,
-    image: firstImage(service?.images),
+  const parsed = parseServiceMeta(service?.description ?? null);
+
+  const [form, setForm] = useState({
+    title: service?.title || "",
+    description: parsed.cleanDesc,
+    category: service?.category || "",
+    price_min: service?.price_min?.toString() || "",
+    price_max: service?.price_max?.toString() || "",
+    location: service?.location || "",
   });
+  const [images, setImages] = useState<string[]>(service?.images || []);
 
-  useEffect(() => {
-    const fetchService = async () => {
-      const { data } = await supabase
-        .from("services")
-        .select("*")
-        .eq("id", id)
-        .eq("is_approved", true)
-        .maybeSingle();
-      setService(data);
-      setLoading(false);
-      // Increment view count + fetch vendor WhatsApp
-      if (data) {
-        supabase.rpc("increment_view_count", { service_id: data.id }).then(() => {});
-        // Get vendor's dedicated WA number from their profile
-        if (data.user_id) {
-          supabase
-            .from("vendor_profiles")
-            .select("brand_whatsapp, brand_phone1")
-            .eq("user_id", data.user_id)
-            .maybeSingle()
-            .then(({ data: vp }) => {
-              if (vp?.brand_whatsapp) setVendorWhatsapp(vp.brand_whatsapp);
-              else if (vp?.brand_phone1) setVendorWhatsapp(vp.brand_phone1);
-            });
-        }
-      }
+  // Contact & meta fields
+  const [phone1, setPhone1]   = useState(parsed.phone1);
+  const [phone2, setPhone2]   = useState(parsed.phone2);
+  const [address, setAddress] = useState(parsed.address);
+  const [logoUrl, setLogoUrl] = useState(parsed.logoUrl);
+  const [instagram, setInstagram] = useState(parsed.instagram);
+  const [whatsapp, setWhatsapp] = useState(parsed.whatsapp || parsed.phone1);
+  const [district, setDistrict] = useState(parsed.district);
+  const [capacity, setCapacity] = useState(parsed.capacity);
+  const [capacityMax, setCapacityMax] = useState(parsed.capacityMax ?? "");
+  const [menuImages, setMenuImages] = useState<string[]>(parsed.menuImages);
+
+  // Venue checkboxes — restored from saved data
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(parsed.amenities);
+  const [selectedCuisines,  setSelectedCuisines]  = useState<string[]>(parsed.cuisines);
+
+  const toggleAmenity = (a: string) =>
+    setSelectedAmenities(prev => prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]);
+  const toggleCuisine = (c: string) =>
+    setSelectedCuisines(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]);
+
+  // Bride Assistant fields
+  const [baFullName, setBaFullName] = useState("");
+  const [baAge, setBaAge]           = useState("");
+  const [baReelsSkill, setBaReelsSkill]     = useState(false);
+  const [baMobileContent, setBaMobileContent] = useState(false);
+
+  const isVenue   = isVenueCategory(form.category);
+  const isBa      = isBrideAssistant(form.category);
+  const showMinMax = needsMinMax(form.category);
+  const showLocation = needsLocation(form.category);
+  const showAddress = needsAddress(form.category);
+  const showMenu = needsMenu(form.category);
+
+  // ── Upload helpers ──────────────────────────────────────────────────────────
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !user) return;
+    setUploading(true);
+    const newMedia: string[] = [];
+    for (const file of Array.from(e.target.files)) {
+      if (file.size > 500 * 1024 * 1024) { toast.error(`${file.name} çox böyükdür (maks 500MB)`); continue; }
+      if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) { toast.error(`${file.name} dəstəklənmir.`); continue; }
+      const ext = file.name.split(".").pop();
+      const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from("service-images").upload(path, file);
+      if (error) { toast.error(`${file.name} yüklənmədi: ${error.message}`); continue; }
+      const { data } = supabase.storage.from("service-images").getPublicUrl(path);
+      newMedia.push(data.publicUrl);
+    }
+    setImages(prev => [...prev, ...newMedia]);
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0] || !user) return;
+    const file = e.target.files[0];
+    if (file.size > 5 * 1024 * 1024) { toast.error("Logo 5MB-dan böyük ola bilməz"); return; }
+    setLogoUploading(true);
+    const ext = file.name.split(".").pop();
+    const path = `${user.id}/logo-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("service-images").upload(path, file);
+    if (error) { toast.error("Logo yüklənmədi"); setLogoUploading(false); return; }
+    const { data } = supabase.storage.from("service-images").getPublicUrl(path);
+    setLogoUrl(data.publicUrl);
+    setLogoUploading(false);
+    e.target.value = "";
+  };
+
+  const handleMenuImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !user) return;
+    setMenuUploading(true);
+    const newImgs: string[] = [];
+    for (const file of Array.from(e.target.files)) {
+      if (!file.type.startsWith("image/")) { toast.error(`${file.name} şəkil deyil`); continue; }
+      if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name} 10MB-dan böyükdür`); continue; }
+      const ext = file.name.split(".").pop();
+      const path = `${user.id}/menu-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from("service-images").upload(path, file);
+      if (error) { toast.error(`${file.name} yüklənmədi`); continue; }
+      const { data } = supabase.storage.from("service-images").getPublicUrl(path);
+      newImgs.push(data.publicUrl);
+    }
+    setMenuImages(prev => [...prev, ...newImgs]);
+    setMenuUploading(false);
+    if (newImgs.length > 0) toast.success("Menyu şəkli yükləndi!");
+    e.target.value = "";
+  };
+
+  const removeMenuImage = (i: number) => setMenuImages(prev => prev.filter((_, idx) => idx !== i));
+
+  const removeMedia = (i: number) => setImages(prev => prev.filter((_, idx) => idx !== i));
+
+  // ── Submit ──────────────────────────────────────────────────────────────────
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    // Edit limit check
+    if (service && (service.edit_count ?? 0) >= 2) { toast.error(t("editLimitReached")); return; }
+    if (!form.title || !form.category) { toast.error(t("fieldRequired")); return; }
+    if (!form.price_min) { toast.error(t("priceRequired")); return; }
+    if (!phone1) { toast.error(t("phoneRequired2")); return; }
+    if (!whatsapp) { toast.error(t("whatsappRequired")); return; }
+    if (!logoUrl) { toast.error(t("logoRequired2")); return; }
+    if (isBa && (!baFullName || !baAge)) { toast.error(t("baRequired")); return; }
+    if (isBa && !baReelsSkill && !baMobileContent) { toast.error(t("baSkillRequired")); return; }
+
+    setLoading(true);
+
+    let description = form.description.trim();
+    if (isBa) {
+      description = `Ad Soyad: ${baFullName}\nYaş: ${baAge}\nReels düzəltmə: ${baReelsSkill ? "Bəli" : "Xeyr"}\nMobil kontent: ${baMobileContent ? "Bəli" : "Xeyr"}\n\n${description}`;
+    }
+
+    // Build meta block — amenities/cuisines saved with || separator
+    const meta: string[] = [`\n---\nƏlaqə 1: ${phone1}`];
+    if (phone2)     meta.push(`Əlaqə 2: ${phone2}`);
+    meta.push(`WhatsApp: ${whatsapp}`);
+    if (address)    meta.push(`Ünvan: ${address}`);
+    if (logoUrl)    meta.push(`Logo: ${logoUrl}`);
+    if (instagram)  meta.push(`Instagram: ${instagram}`);
+    if (district)   meta.push(`Rayon: ${district}`);
+    if (capacity)   meta.push(`Tutum: ${capacity}`);
+    if (capacityMax) meta.push(`TutumMax: ${capacityMax}`);
+    if (selectedAmenities.length) meta.push(`Xidmətlər: ${selectedAmenities.join(" || ")}`);
+    if (selectedCuisines.length)  meta.push(`Mətbəx: ${selectedCuisines.join(" || ")}`);
+    if (menuImages.length) meta.push(`MenuImages: ${menuImages.join(" || ")}`);
+    description += meta.join("\n");
+
+    const payload = {
+      title: form.title.trim(),
+      description,
+      category: form.category,
+      price_min: form.price_min ? Number(form.price_min) : null,
+      price_max: showMinMax && form.price_max ? Number(form.price_max) : null,
+      location: showLocation ? form.location : null,
+      images,
+      vendor_id: user.id,
+      is_approved: false,
     };
-    if (id) fetchService();
-  }, [id]);
 
-  useEffect(() => {
-    if (!service) return;
-    const venueCategories = ["wedding-hall", "banquet-hall"];
-
-    // Similar: same category, exclude current service
-    supabase.from("services").select("*")
-      .eq("category", service.category)
-      .eq("is_approved", true)
-      .neq("id", service.id)
-      .then(({ data }) => setSimilarServices(data || []));
-
-    // Mixed: other categories, exclude venues AND current category, exclude current service
-    supabase.from("services").select("*")
-      .eq("is_approved", true)
-      .neq("id", service.id)
-      .then(({ data }) => {
-        const filtered = (data || []).filter(
-          s => !venueCategories.includes(s.category) && s.category !== service.category
-        );
-        setMixedServices(filtered);
-      });
-  }, [service]);
-
-  useEffect(() => {
-    if (!user || !id) return;
-    supabase
-      .from("favorites")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("service_id", id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) { setLiked(true); setFavId(data.id); }
-      });
-  }, [user, id]);
-
-  const toggleFavorite = async () => {
-    if (!user) { toast.info(t("login")); return; }
-    if (liked && favId) {
-      await supabase.from("favorites").delete().eq("id", favId);
-      setLiked(false); setFavId(null);
-      toast.success(t("favRemoved"));
-    } else {
-      const { data, error } = await supabase
-        .from("favorites")
-        .insert({ user_id: user.id, service_id: id! })
-        .select("id")
-        .single();
-      if (!error && data) { setLiked(true); setFavId(data.id); toast.success(t("favAdded")); }
+    try {
+      if (service) {
+        const { error } = await supabase.from("services").update({ ...payload, edit_count: (service.edit_count ?? 0) + 1 }).eq("id", service.id);
+        if (error) throw error;
+        toast.success(t("svcUpdated"));
+      } else {
+        const { error } = await supabase.from("services").insert(payload);
+        if (error) throw error;
+        toast.success(t("svcAdded"));
+      }
+      onSaved();
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Xəta baş verdi");
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen">
-        <Navbar />
-        <div className="pt-24 flex items-center justify-center py-20">
-          <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-        </div>
-        <Footer />
-      </div>
-    );
+  // ── Styles ──────────────────────────────────────────────────────────────────
+  const inputCls = "w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all";
+  const inputStyle = { background: "hsl(28 38% 97%)", border: "1px solid hsl(25 28% 86%)", color: "hsl(20 20% 18%)" };
+  const sectionStyle = { background: "hsl(28 35% 95%)", border: "1px solid hsl(25 26% 87%)" };
+
+  // Map preview from Google Maps link
+  const coordMatch = address.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  const placeMatch = address.match(/place\/([^/@?]+)/);
+  const placeName = placeMatch ? decodeURIComponent(placeMatch[1]).replace(/\+/g, " ") : "";
+
+  let mapSrc = "";
+  if (coordMatch) {
+    const lat = coordMatch[1]; const lng = coordMatch[2];
+    const q = placeName || `${lat},${lng}`;
+    mapSrc = `https://maps.google.com/maps?q=${encodeURIComponent(q)}&ll=${lat},${lng}&z=16&output=embed`;
+  } else if (placeName) {
+    mapSrc = `https://maps.google.com/maps?q=${encodeURIComponent(placeName)}&output=embed`;
+  } else if (address.startsWith("http") && address.includes("google.com/maps")) {
+    mapSrc = address.includes("output=embed") ? address : address + (address.includes("?") ? "&output=embed" : "?output=embed");
+  } else if (address && !address.startsWith("http")) {
+    mapSrc = `https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`;
   }
 
-  if (!service) {
-    return (
-      <div className="min-h-screen">
-        <Navbar />
-        <div className="pt-24 container mx-auto px-4 text-center py-20">
-          <p className="text-muted-foreground text-lg">{t("notFound")}</p>
-          <Button variant="outline" className="mt-4" asChild>
-            <Link to="/categories">{t("back")}</Link>
-          </Button>
-        </div>
-        <Footer />
-      </div>
-    );
-  }
-
-  const images: string[] = service.images || [];
-  const safeIdx = images.length > 0 ? Math.min(selectedImg, images.length - 1) : 0;
-  const { cleanDesc, phones, address, logoUrl, instagram, district, capacity, amenities, cuisines, whatsapp: metaWA } = parseServiceMeta(service.description);
-
-  const isVenue = ["wedding-hall", "banquet-hall"].includes(service.category);
-  const catInfo = categories.find((c) => c.id === service.category);
-
-  // Build WhatsApp message in current language
-  const waMsg = lang === "ru"
-    ? `Здравствуйте! Пишу вам с сайта toyqur.az. Интересует услуга "${service.title}". Расскажите подробнее, пожалуйста.`
-    : lang === "en"
-    ? `Hello! I am contacting you from toyqur.az. I am interested in "${service.title}". Could you please provide more details?`
-    : `Salam! Sizə toyqur.az saytından müraciət edirəm. "${service.title}" xidmətiniz ilə maraqlanıram. Ətraflı məlumat verə bilərsinizmi?`;
-  const waAutoMsg = encodeURIComponent(waMsg);
-
-  // Priority: service meta WA → vendor profile WA → description phone1 → site default
-  const rawWA = metaWA || vendorWhatsapp || phones[0] || "+994104195344";
-  // Normalize to international format without + (WhatsApp requires this)
-  const waNumber = rawWA.replace(/[\s\-()+]/g, "").replace(/^0/, "994");
-  const primaryPhone = phones[0] || rawWA;
-
-  const handleShare = () => setShareOpen(v => !v);
-
-  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
-  const shareText = encodeURIComponent(`${service?.title ?? ""} — ToyQur.az`);
-  const shareLink = encodeURIComponent(shareUrl);
-
-  const cardStyle = {
-    background: "linear-gradient(160deg, hsl(30 42% 98%) 0%, hsl(24 35% 95%) 100%)",
-    border: "1px solid hsl(25 28% 87%)",
-    boxShadow: "0 2px 8px hsl(25 18% 75% / 0.2)",
-  };
+  const mapsExternalHref = address.startsWith("http")
+    ? address
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
   return (
-    <div className="min-h-screen">
-      <Navbar />
-      <div className="pt-24 pb-16">
-        <div className="container mx-auto px-4">
-          <Link to="/categories" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-6 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            {t("back")}
-          </Link>
+    <div>
+      <button onClick={onClose} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mb-6 transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Geri
+      </button>
+      <h2 className="text-xl font-serif font-semibold text-foreground mb-6">
+        {service ? t("editService") : t("addService")}
+      </h2>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-            {/* Left: Images */}
-            <div className="lg:col-span-3">
-              <div
-                className="rounded-2xl overflow-hidden mb-3 aspect-[16/10] cursor-pointer"
-                onClick={() => { if (images.length > 0 && !isVideoFile(images[safeIdx])) setLightboxOpen(true); }}
-              >
-                {images.length === 0 ? (
-                  <img src="/placeholder.svg" alt={service.title} className="w-full h-full object-cover" />
-                ) : isVideoFile(images[safeIdx]) ? (
-                  <video
-                    src={images[safeIdx]}
-                    controls
-                    controlsList="nodownload"
-                    className="w-full h-full object-contain bg-black"
-                    style={{ maxHeight: "100%" }}
-                  />
-                ) : (
-                  <img
-                    src={images[safeIdx]}
-                    alt={service.title}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                  />
-                )}
+      <form onSubmit={handleSubmit} className="max-w-2xl space-y-5">
+
+        {/* ── Logo ── */}
+        <div>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">
+            Logo / Profil şəkli <span className="text-destructive">*</span>
+            <span className="text-xs text-muted-foreground font-normal ml-1">(Mütləq)</span>
+          </label>
+          <div className="flex items-center gap-4">
+            {logoUrl ? (
+              <div className="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-primary/30">
+                <img src={logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                <button type="button" onClick={() => setLogoUrl("")}
+                  className="absolute top-0.5 right-0.5 w-5 h-5 bg-foreground/70 text-background rounded-full flex items-center justify-center">
+                  <X className="w-3 h-3" />
+                </button>
               </div>
-
-              {images.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {images.map((media, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setSelectedImg(i)}
-                      className={`flex-shrink-0 w-20 h-16 rounded-lg overflow-hidden border-2 transition-colors ${i === safeIdx ? "border-primary" : "border-transparent"}`}
-                    >
-                      {isVideoFile(media) ? (
-                        <div className="w-full h-full bg-muted flex items-center justify-center relative">
-                          <video src={media} className="w-full h-full object-cover" muted />
-                          <Play className="absolute w-5 h-5 text-primary-foreground bg-primary/70 rounded-full p-0.5" />
-                        </div>
-                      ) : (
-                        <img src={media} alt="" className="w-full h-full object-cover" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Map section */}
-              {address && (() => {
-                // Extract coordinates from Google Maps URL: @lat,lng
-                const coordMatch = address.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-                // Extract place name from URL
-                const placeMatch = address.match(/place\/([^/@?]+)/);
-                const placeName = placeMatch ? decodeURIComponent(placeMatch[1]).replace(/\+/g, " ") : "";
-
-                // Always use original vendor link as external href if it's a URL
-                const externalHref = address.startsWith("http")
-                  ? address
-                  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
-
-                // Build Google Maps embed URL
-                let embedSrc = "";
-                if (coordMatch) {
-                  const lat = coordMatch[1];
-                  const lng = coordMatch[2];
-                  const q = placeName || `${lat},${lng}`;
-                  embedSrc = `https://maps.google.com/maps?q=${encodeURIComponent(q)}&ll=${lat},${lng}&z=16&output=embed`;
-                } else if (placeName) {
-                  embedSrc = `https://maps.google.com/maps?q=${encodeURIComponent(placeName)}&output=embed`;
-                } else if (address.startsWith("http")) {
-                  // Try to use vendor's raw Google Maps link directly as embed
-                  // Convert share links: maps.app.goo.gl can't embed, fallback to button
-                  const isEmbeddable = address.includes("google.com/maps");
-                  if (isEmbeddable) {
-                    embedSrc = address.includes("output=embed")
-                      ? address
-                      : address + (address.includes("?") ? "&output=embed" : "?output=embed");
-                  }
-                } else {
-                  // Plain text address
-                  embedSrc = `https://maps.google.com/maps?q=${encodeURIComponent(address)}&output=embed`;
+            ) : (
+              <label className="w-20 h-20 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors"
+                style={{ borderColor: "hsl(15 30% 55%)", background: "hsl(28 38% 97%)" }}>
+                {logoUploading
+                  ? <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  : <><Upload className="w-5 h-5 text-primary mb-1" /><span className="text-xs text-primary font-medium">Logo</span></>
                 }
+                <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" disabled={logoUploading} />
+              </label>
+            )}
+            <p className="text-sm text-muted-foreground">Şirkət loqonuzu yükləyin.<br /><span className="text-xs">Maks 5MB · JPG, PNG, WebP</span></p>
+          </div>
+        </div>
 
-                return (
-                  <div className="mt-6 rounded-2xl overflow-hidden" style={cardStyle}>
-                    <div className="p-4 flex items-center justify-between border-b border-border">
-                      <h3 className="font-serif font-semibold text-foreground flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-primary" />
-                        {t("mapTitle")}
-                      </h3>
-                      <a
-                        href={externalHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        {t("mapBtn")}
+        {/* ── Title ── */}
+        <div>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">Xidmət adı *</label>
+          <input type="text" value={form.title} onChange={e => setForm({...form, title: e.target.value})}
+            className={inputCls} style={inputStyle} placeholder="Məs: Studio Araz Photography" required />
+        </div>
+
+        {/* ── Category ── */}
+        <div>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">Kateqoriya *</label>
+          <div className="relative">
+            <select value={form.category} onChange={e => setForm({...form, category: e.target.value})}
+              className={`${inputCls} appearance-none`} style={inputStyle} required>
+              <option value="">{t("select")}</option>
+              <optgroup label={t("cat.group.venues")}>
+                {categories.filter(c => c.group === "Məkanlar").map(cat => (
+                  <option key={cat.id} value={cat.id}>{t(`cat.${cat.id}`) || cat.name}</option>
+                ))}
+              </optgroup>
+              <optgroup label={t("cat.group.other")}>
+                {categories.filter(c => !c.group).map(cat => (
+                  <option key={cat.id} value={cat.id}>{t(`cat.${cat.id}`) || cat.name}</option>
+                ))}
+              </optgroup>
+            </select>
+            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          </div>
+        </div>
+
+        {/* ── Bride Assistant ── */}
+        {isBa && (
+          <div className="rounded-xl p-5 space-y-4" style={sectionStyle}>
+            <h3 className="text-sm font-semibold text-foreground">👗 Bride Assistant Məlumatları</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Ad Soyad *</label>
+                <input type="text" value={baFullName} onChange={e => setBaFullName(e.target.value)} className={inputCls} style={inputStyle} placeholder="Ad Soyad" required />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Yaş *</label>
+                <input type="number" value={baAge} onChange={e => setBaAge(e.target.value)} className={inputCls} style={inputStyle} placeholder="25" min="18" max="60" required />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground block">Bacarıqlar *</label>
+              <label className="flex items-center gap-3 text-sm text-foreground cursor-pointer">
+                <input type="checkbox" checked={baReelsSkill} onChange={e => setBaReelsSkill(e.target.checked)} className="w-4 h-4 rounded accent-primary" />
+                Reels videoları düzəltmə / edit etmə
+              </label>
+              <label className="flex items-center gap-3 text-sm text-foreground cursor-pointer">
+                <input type="checkbox" checked={baMobileContent} onChange={e => setBaMobileContent(e.target.checked)} className="w-4 h-4 rounded accent-primary" />
+                Telefon vasitəsilə video və foto çəkmək
+              </label>
+            </div>
+          </div>
+        )}
+
+        {/* ── Description ── */}
+        <div>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">Haqqında</label>
+          <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})}
+            className={`${inputCls} min-h-[100px]`} style={inputStyle} placeholder="Xidmətiniz haqqında məlumat verin..." />
+        </div>
+
+        {/* ── Phones ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">{t("phoneLabel")} 1 *</label>
+            <input type="tel" value={phone1} onChange={e => setPhone1(e.target.value)} className={inputCls} style={inputStyle} placeholder={t("whatsappPlaceholder")} required />
+          </div>
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">{t("phoneLabel")} 2</label>
+            <input type="tel" value={phone2} onChange={e => setPhone2(e.target.value)} className={inputCls} style={inputStyle} placeholder={t("whatsappPlaceholder")} />
+          </div>
+        </div>
+
+        {/* ── WhatsApp (required) ── */}
+        <div>
+          <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5 block">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" style={{color:"hsl(142 60% 42%)"}}>
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+              <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.554 4.12 1.523 5.85L.057 23.426a.5.5 0 00.617.617l5.57-1.466A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.967 0-3.807-.535-5.388-1.467l-.385-.228-3.996 1.052 1.052-3.892-.25-.397A9.955 9.955 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+            </svg>
+            {t("whatsappField")} *
+          </label>
+          <input type="tel" value={whatsapp} onChange={e => setWhatsapp(e.target.value)}
+            className={inputCls} style={inputStyle} placeholder={t("whatsappPlaceholder")} required />
+        </div>
+
+        {/* ── Instagram ── */}
+        <div>
+          <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5 block">
+            <Instagram className="w-4 h-4 text-primary" />
+            Instagram hesabı
+            <span className="text-xs text-muted-foreground font-normal">(İstəyə görə)</span>
+          </label>
+          <input
+            type="text"
+            value={instagram}
+            onChange={e => setInstagram(e.target.value)}
+            className={inputCls}
+            style={inputStyle}
+            placeholder="@hesabiniz və ya https://instagram.com/hesabiniz"
+          />
+        </div>
+
+        {/* ── Price ── */}
+        {showMinMax ? (
+          /* Min/Max qiymət — bu kateqoriyalar üçün */
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                {isVenue ? t("minSeatPrice") : "Minimum qiymət (₼)"} *
+              </label>
+              <input type="number" value={form.price_min} onChange={e => setForm({...form, price_min: e.target.value})}
+                className={inputCls} style={inputStyle} placeholder={isVenue ? "50" : "200"} min="0" required />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                {isVenue ? t("maxSeatPrice") : "Maksimum qiymət (₼)"}
+                <span className="text-xs text-muted-foreground ml-1">(İstəyə görə)</span>
+              </label>
+              <input type="number" value={form.price_max} onChange={e => setForm({...form, price_max: e.target.value})}
+                className={inputCls} style={inputStyle} placeholder={isVenue ? "150" : "1500"} min="0" />
+            </div>
+          </div>
+        ) : (
+          /* Konkret qiymət — digər kateqoriyalar üçün */
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">
+              Qiymət (₼) *
+              <span className="text-xs text-muted-foreground font-normal ml-1">(Konkret məbləğ)</span>
+            </label>
+            <input
+              type="number"
+              value={form.price_min}
+              onChange={e => setForm({...form, price_min: e.target.value})}
+              className={inputCls}
+              style={inputStyle}
+              placeholder="Məs: 150"
+              min="0"
+              required={!!form.category}
+            />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              💡 Xidmətinizin başlanğıc qiymətini daxil edin
+            </p>
+          </div>
+        )}
+
+        {/* ── Location — yalnız müvafiq kateqoriyalar üçün ── */}
+        {showLocation && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Şəhər</label>
+              <div className="relative">
+                <select value={form.location} onChange={e => setForm({...form, location: e.target.value})}
+                  className={`${inputCls} appearance-none`} style={inputStyle}>
+                  <option value="">{t("select")}</option>
+                  {cities.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              </div>
+            </div>
+            {form.location === "Bakı" && (
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Rayon</label>
+                <div className="relative">
+                  <select value={district} onChange={e => setDistrict(e.target.value)}
+                    className={`${inputCls} appearance-none`} style={inputStyle}>
+                    <option value="">{t("select")}</option>
+                    {bakuDistricts.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Address + Map ── */}
+        {showAddress && (
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1.5 flex items-center gap-1.5 block">
+              <MapPin className="w-4 h-4 text-primary" />
+              Google Maps linki
+              <span className="text-xs text-muted-foreground font-normal">(tövsiyə olunur)</span>
+            </label>
+            <input type="text" value={address} onChange={e => setAddress(e.target.value)}
+              className={inputCls} style={inputStyle}
+              placeholder="Google Maps linkini yapışdırın — maps.google.com/..." />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              💡 {t("mapHint")}
+            </p>
+            {address && (
+              <div className="mt-3 rounded-xl overflow-hidden border border-border">
+                {mapSrc ? (
+                  <>
+                    <iframe title="map-preview" width="100%" height="200"
+                      style={{ border: 0, display: "block" }} loading="lazy"
+                      allowFullScreen referrerPolicy="no-referrer-when-downgrade"
+                      src={mapSrc} />
+                    <div className="px-3 py-2 flex items-center justify-between border-t border-border"
+                      style={{ background: "hsl(28 35% 95%)" }}>
+                      <span className="text-xs text-muted-foreground truncate max-w-[60%]">{address}</span>
+                      <a href={mapsExternalHref} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-primary flex items-center gap-1 hover:underline">
+                        <ExternalLink className="w-3 h-3" /> Google Maps-da Bax
                       </a>
                     </div>
-
-                    {embedSrc ? (
-                      <div style={{ height: 260 }}>
-                        <iframe
-                          title="location-map"
-                          width="100%"
-                          height="260"
-                          style={{ border: 0, display: "block" }}
-                          loading="lazy"
-                          allowFullScreen
-                          referrerPolicy="no-referrer-when-downgrade"
-                          src={embedSrc}
-                        />
-                      </div>
-                    ) : (
-                      /* Fallback: goo.gl short links or unembeddable — show button */
-                      <div
-                        className="flex flex-col items-center justify-center gap-4 py-10"
-                        style={{ background: "hsl(25 28% 94%)", height: 160 }}
-                      >
-                        <MapPin className="w-9 h-9 text-primary/40" />
-                        <a
-                          href={externalHref}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-90"
-                          style={{ background: "hsl(16 38% 44%)" }}
-                        >
-                          <ExternalLink className="w-4 h-4" /> {t("mapBtn")}
-                        </a>
-                      </div>
-                    )}
-
-                    <div className="px-4 py-2.5 border-t border-border">
+                  </>
+                ) : (
+                  <div className="p-4 flex items-center gap-3" style={{ background: "hsl(28 35% 95%)" }}>
+                    <MapPin className="w-5 h-5 text-primary flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
                       <p className="text-xs text-muted-foreground truncate">{address}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Google Maps linki tanınmadı</p>
                     </div>
-                  </div>
-                );
-              })()}
-
-              {/* Description — below images and map */}
-              {cleanDesc && (
-                <div className="mt-6 rounded-2xl p-5" style={cardStyle}>
-                  <h3 className="font-serif font-semibold text-foreground mb-3">{t("about_vendor")}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">{cleanDesc}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Right: Details */}
-            <div className="lg:col-span-2">
-              <div className="sticky top-24">
-                {/* Logo + header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-start gap-3">
-                    {logoUrl && (
-                      <img src={logoUrl} alt="logo" className="w-14 h-14 rounded-xl object-cover border border-border flex-shrink-0" />
-                    )}
-                    <div>
-                      {catInfo && (
-                        <span className="text-xs px-2.5 py-1 rounded-full inline-block mb-2" style={{ background: "hsl(25 30% 89%)", color: "hsl(20 20% 32%)" }}>
-                          {t(`cat.${service.category}`) || catInfo.name}
-                        </span>
-                      )}
-                      <h1 className="text-xl md:text-2xl font-serif font-bold text-foreground mb-1">
-                        {service.title}
-                      </h1>
-                      {service.location && (
-                        <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
-                          <MapPin className="w-3.5 h-3.5" />
-                          <span>{service.location}{district ? `, ${district}` : ""}</span>
-                        </div>
-                      )}
-                      {/* View count */}
-                      {(service.view_count ?? 0) > 0 && (
-                        <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>{service.view_count} {t("views")}</span>
-                        </div>
-                      )}
-                      <Link to={`/store/${service.vendor_id}`}
-                        className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all hover:opacity-90"
-                        style={{
-                          background: "linear-gradient(135deg, hsl(16 38% 48%) 0%, hsl(20 45% 42%) 100%)",
-                          color: "#fff",
-                          border: "1px solid hsl(16 38% 40%)",
-                          boxShadow: "0 2px 8px hsl(16 38% 48% / 0.3)",
-                        }}>
-                        <Store className="w-3.5 h-3.5" />
-                        {t("store")}
-                      </Link>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 flex-shrink-0 relative">
-                    <button onClick={toggleFavorite} className="w-10 h-10 rounded-full border border-border flex items-center justify-center hover:border-primary/30 transition-colors">
-                      <Heart className={`w-4 h-4 ${liked ? "text-primary fill-primary" : "text-foreground/50"}`} />
-                    </button>
-                    <div className="relative">
-                      <button
-                        onClick={handleShare}
-                        className="w-10 h-10 rounded-full border border-border flex items-center justify-center hover:border-primary/30 transition-colors"
-                      >
-                        <Share2 className="w-4 h-4 text-foreground/50" />
-                      </button>
-
-                      {shareOpen && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setShareOpen(false)} />
-                          <div
-                            className="absolute right-0 top-12 z-50 rounded-2xl p-4"
-                            style={{
-                              background: "linear-gradient(145deg, hsl(30 42% 99%) 0%, hsl(24 35% 96%) 100%)",
-                              border: "1px solid hsl(25 28% 85%)",
-                              boxShadow: "0 8px 32px hsl(20 20% 60% / 0.18), 0 2px 8px hsl(20 20% 60% / 0.10)",
-                              minWidth: 200,
-                            }}
-                          >
-                            <p className="text-xs font-semibold tracking-widest uppercase text-muted-foreground mb-3 text-center" style={{ letterSpacing: "0.12em" }}>
-                              {t("share")}
-                            </p>
-                            <div className="flex items-center justify-center gap-3">
-                              {/* WhatsApp */}
-                              <a
-                                href={`https://wa.me/?text=${shareText}%20${shareLink}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => setShareOpen(false)}
-                                title="WhatsApp"
-                                className="group flex flex-col items-center gap-1.5"
-                              >
-                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-110 group-hover:shadow-md"
-                                  style={{ background: "linear-gradient(145deg, #25d366, #128c7e)" }}>
-                                  <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white">
-                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.555 4.122 1.526 5.856L.057 23.215a.75.75 0 00.921.921l5.37-1.47A11.932 11.932 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.716 9.716 0 01-4.964-1.364l-.356-.214-3.686 1.008 1.007-3.676-.232-.368A9.718 9.718 0 012.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/>
-                                  </svg>
-                                </div>
-                                <span className="text-[10px] text-muted-foreground font-medium">WhatsApp</span>
-                              </a>
-
-                              {/* Telegram */}
-                              <a
-                                href={`https://t.me/share/url?url=${shareLink}&text=${shareText}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => setShareOpen(false)}
-                                title="Telegram"
-                                className="group flex flex-col items-center gap-1.5"
-                              >
-                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-110 group-hover:shadow-md"
-                                  style={{ background: "linear-gradient(145deg, #29b6f6, #0277bd)" }}>
-                                  <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white">
-                                    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.244-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
-                                  </svg>
-                                </div>
-                                <span className="text-[10px] text-muted-foreground font-medium">Telegram</span>
-                              </a>
-
-                              {/* Instagram — copy link */}
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    await navigator.clipboard.writeText(shareUrl);
-                                    toast.success(t("igCopy"));
-                                  } catch { toast.error(t("error")); }
-                                  setShareOpen(false);
-                                }}
-                                title="Instagram"
-                                className="group flex flex-col items-center gap-1.5"
-                              >
-                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-110 group-hover:shadow-md"
-                                  style={{ background: "linear-gradient(145deg, #f9ce34, #ee2a7b, #6228d7)" }}>
-                                  <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white">
-                                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                                  </svg>
-                                </div>
-                                <span className="text-[10px] text-muted-foreground font-medium">Instagram</span>
-                              </button>
-
-                              {/* Copy link */}
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    await navigator.clipboard.writeText(shareUrl);
-                                    toast.success(t("copied"));
-                                  } catch { toast.error(t("error")); }
-                                  setShareOpen(false);
-                                }}
-                                title="Linki Kopyala"
-                                className="group flex flex-col items-center gap-1.5"
-                              >
-                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-transform group-hover:scale-110 group-hover:shadow-md"
-                                  style={{ background: "linear-gradient(145deg, hsl(25 35% 55%), hsl(20 30% 38%))" }}>
-                                  <svg viewBox="0 0 24 24" className="w-5 h-5 fill-none stroke-white stroke-2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
-                                    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
-                                  </svg>
-                                </div>
-                                <span className="text-[10px] text-muted-foreground font-medium">{t("copy")}</span>
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Rating — deaktiv edilib */}
-
-                {/* Price */}
-                <div className="p-5 rounded-xl mb-5" style={cardStyle}>
-                  <p className="text-xs text-muted-foreground mb-1">{isVenue ? t("venuePrice") : t("price")}</p>
-                  <p className="text-xl font-serif font-bold text-foreground">
-                    {formatPrice(service.price_min, service.price_max) || t("askPrice")}
-                  </p>
-                </div>
-
-                {/* Dates - created & approved */}
-                <div className="p-4 rounded-xl mb-5 space-y-2" style={{ background: "hsl(28 35% 95%)", border: "1px solid hsl(25 26% 87%)" }}>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="w-4 h-4 text-primary" />
-                    <span>{t("postedAt")}: <span className="text-foreground">{formatDate(service.created_at)}</span></span>
-                  </div>
-                  {service.approved_at && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span>{t("approvedAt")}: <span className="text-foreground">{formatDate(service.approved_at)}</span></span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Venue details — capacity, district, amenities, cuisines */}
-                {isVenue && (district || capacity || amenities.length > 0 || cuisines.length > 0) && (
-                  <div className="mb-5 rounded-xl p-4 space-y-3" style={{ background: "hsl(28 35% 95%)", border: "1px solid hsl(25 26% 87%)" }}>
-                    <h3 className="font-serif font-semibold text-foreground text-sm">{t("venueInfo")}</h3>
-
-                    {district && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
-                        <span className="text-muted-foreground">{t("district")}:</span>
-                        <span className="text-foreground font-medium">{district}</span>
-                      </div>
-                    )}
-
-                    {capacity && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-lg leading-none">👥</span>
-                        <span className="text-muted-foreground">{t("capacity")}:</span>
-                        <span className="text-foreground font-medium">
-                          {capacity === "50" ? t("cap50") : capacity === "100" ? t("cap100") : capacity === "200" ? t("cap200") : capacity === "300" ? t("cap300") : capacity === "500" ? t("cap500") : capacity === "1000" ? t("cap1000") : capacity}
-                        </span>
-                      </div>
-                    )}
-
-                    {amenities.length > 0 && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">{`✅ ${t("amenities")}:`}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {amenities.map((a) => (
-                            <span key={a} className="text-xs px-2.5 py-1 rounded-full font-medium"
-                              style={{ background: "hsl(142 35% 90%)", color: "hsl(142 40% 28%)" }}>
-                              {a}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {cuisines.length > 0 && (
-                      <div>
-                        <p className="text-sm text-muted-foreground mb-2">{`🍽️ ${t("cuisine")}:`}</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {cuisines.map((c) => (
-                            <span key={c} className="text-xs px-2.5 py-1 rounded-full font-medium"
-                              style={{ background: "hsl(25 35% 88%)", color: "hsl(20 30% 30%)" }}>
-                              {c}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    <a href={mapsExternalHref} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-primary flex items-center gap-1 whitespace-nowrap hover:underline">
+                      <ExternalLink className="w-3 h-3" /> Aç
+                    </a>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        )}
 
-                {/* Contact CTAs */}
-                <div className="flex flex-col gap-3">
-                  <Button
-                    size="lg"
-                    className="rounded-xl w-full text-white"
-                    style={{ background: "hsl(142 60% 42%)" }}
-                    asChild
-                  >
-                    <a href={`https://wa.me/${waNumber}?text=${waAutoMsg}`} target="_blank" rel="noopener noreferrer">
-                      <MessageCircle className="w-5 h-5 mr-2" />
-                      {t("contactBtn")}
-                    </a>
-                  </Button>
-                  {phones.map((phone, i) => (
-                    <Button key={i} size="lg" variant="outline" className="rounded-xl w-full" asChild>
-                      <a href={`tel:${phone.replace(/\s/g, "")}`}>
-                        <Phone className="w-5 h-5 mr-2" />{phone}
-                      </a>
-                    </Button>
-                  ))}
-                  {phones.length === 0 && (
-                    <Button size="lg" variant="outline" className="rounded-xl w-full" asChild>
-                      <a href="tel:+994104195344">
-                        <Phone className="w-5 h-5 mr-2" />+994 10 419 53 44
-                      </a>
-                    </Button>
-                  )}
-                  {instagram && (
-                    <Button size="lg" variant="outline" className="rounded-xl w-full" asChild>
-                      <a
-                        href={instagram.startsWith("http") ? instagram : `https://instagram.com/${instagram.replace("@", "")}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Instagram className="w-5 h-5 mr-2" />
-                        {instagram.startsWith("@") ? instagram : `@${instagram.replace(/.*instagram\.com\//, "").replace(/\/$/, "")}`}
-                      </a>
-                    </Button>
-                  )}
+        {/* ── Venue specific ── */}
+        {isVenue && (
+          <>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Qonaq sayı</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Minimum</label>
+                  <input
+                    type="number"
+                    value={capacity}
+                    onChange={e => setCapacity(e.target.value)}
+                    className={inputCls}
+                    style={inputStyle}
+                    placeholder="50"
+                    min="0"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">Maksimum</label>
+                  <input
+                    type="number"
+                    value={capacityMax}
+                    onChange={e => setCapacityMax(e.target.value)}
+                    className={inputCls}
+                    style={inputStyle}
+                    placeholder="500"
+                    min="0"
+                  />
                 </div>
               </div>
             </div>
+
+            <div className="rounded-xl p-5" style={sectionStyle}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-3 block">Mövcud xidmətlər</label>
+                  <div className="space-y-2">
+                    {venueAmenities.map(a => (
+                      <label key={a} className="flex items-center gap-2.5 text-sm text-foreground cursor-pointer select-none">
+                        <input type="checkbox"
+                          checked={selectedAmenities.includes(a)}
+                          onChange={() => toggleAmenity(a)}
+                          className="w-4 h-4 rounded accent-primary" />
+                        {a}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-3 block">Mətbəx</label>
+                  <div className="space-y-2">
+                    {cuisineTypes.map(c => (
+                      <label key={c} className="flex items-center gap-2.5 text-sm text-foreground cursor-pointer select-none">
+                        <input type="checkbox"
+                          checked={selectedCuisines.includes(c)}
+                          onChange={() => toggleCuisine(c)}
+                          className="w-4 h-4 rounded accent-primary" />
+                        {c}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── Menyu şəkilləri — yalnız toy/banket zalları üçün ── */}
+        {showMenu && (
+          <div className="rounded-xl p-5" style={sectionStyle}>
+            <label className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2 block">
+              <Image className="w-4 h-4 text-primary" />
+              Menyu / Qiymət siyahısı şəkilləri
+              <span className="text-xs text-muted-foreground font-normal">(İstəyə görə)</span>
+            </label>
+            <p className="text-xs text-muted-foreground mb-3">
+              Menyunuzu, qiymət siyahınızı və ya zal şəkillərini yükləyin. Müştərilər detallarda görə bilər. Bir neçə şəkil əlavə edə bilərsiniz.
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+              {menuImages.map((img, i) => (
+                <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-border">
+                  <img src={img} alt="" className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => removeMenuImage(i)}
+                    className="absolute top-1 right-1 w-6 h-6 bg-foreground/70 text-background rounded-full flex items-center justify-center">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              <label className="aspect-square rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-primary/40 transition-colors">
+                {menuUploading
+                  ? <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  : <><Upload className="w-6 h-6 text-muted-foreground mb-1" /><span className="text-xs text-muted-foreground">Şəkil əlavə et</span></>
+                }
+                <input type="file" accept="image/*" multiple onChange={handleMenuImageUpload} className="hidden" disabled={menuUploading} />
+              </label>
+            </div>
+          </div>
+        )}
+
+        {/* ── Media ── */}
+        <div>
+          <label className="text-sm font-medium text-foreground mb-1.5 block">Şəkillər və Videolar</label>
+          <p className="text-xs text-muted-foreground mb-3">Şəkil (JPG, PNG) və video (MP4, MOV) yükləyə bilərsiniz. Maks: 500MB</p>
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+            {images.map((media, i) => (
+              <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-border">
+                {isVideoFile(media)
+                  ? <div className="w-full h-full bg-muted flex items-center justify-center relative">
+                      <video src={media} className="w-full h-full object-cover" muted />
+                      <Play className="absolute w-8 h-8 text-primary-foreground bg-primary/70 rounded-full p-1.5" />
+                    </div>
+                  : <img src={media} alt="" className="w-full h-full object-cover" />
+                }
+                <button type="button" onClick={() => removeMedia(i)}
+                  className="absolute top-1 right-1 w-6 h-6 bg-foreground/70 text-background rounded-full flex items-center justify-center">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            <label className="aspect-square rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-primary/40 transition-colors">
+              <Upload className="w-6 h-6 text-muted-foreground mb-1" />
+              <span className="text-xs text-muted-foreground">{uploading ? "Yüklənir..." : t("addMedia")}</span>
+              <input type="file" accept="image/*,video/mp4,video/quicktime,video/webm" multiple onChange={handleMediaUpload} className="hidden" disabled={uploading} />
+            </label>
           </div>
         </div>
-      </div>
 
-      {lightboxOpen && images.length > 0 && (
-        <ImageLightbox
-          images={images}
-          initialIndex={safeIdx}
-          onClose={() => setLightboxOpen(false)}
-        />
-      )}
-
-      {/* Similar products — slider */}
-      {similarServices.length > 0 && (
-        <div className="pb-6" style={{ background: "hsl(28 38% 98%)" }}>
-          <div className="container mx-auto px-4">
-            <DetailSlider
-              title={`${t(`cat.${service?.category}`) || categories.find(c => c.id === service?.category)?.name} — ${t("similarProducts")}`}
-              items={similarServices}
-              accentColor="hsl(16 38% 48%)"
-              viewAllLink={`/categories?cat=${service?.category}`}
-            />
-          </div>
+        <div className="rounded-xl p-4 text-sm text-muted-foreground" style={sectionStyle}>
+          <p>{t("formWarning")}</p>
         </div>
-      )}
 
-      {/* Mixed products — single mixed slider */}
-      {mixedServices.length > 0 && (
-        <div className="pb-16" style={{ background: "hsl(28 38% 98%)" }}>
-          <div className="container mx-auto px-4">
-            <DetailSlider
-              title={t("otherProducts")}
-              items={mixedServices}
-              accentColor="hsl(25 35% 65%)"
-              viewAllLink="/categories"
-            />
-          </div>
+        <div className="flex gap-3 pt-2">
+          <Button type="submit" className="rounded-xl" disabled={loading}>
+            {loading ? t("submitting") : service ? t("saveService") : t("addServiceBtn")}
+          </Button>
+          <Button type="button" variant="outline" className="rounded-xl" onClick={onClose}>Ləğv Et</Button>
         </div>
-      )}
-
-      <Footer />
+      </form>
     </div>
   );
 };
 
-export default ListingDetail;
+export default ServiceForm;

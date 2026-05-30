@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowLeft, Upload, X, ChevronDown, Play, MapPin, ExternalLink, Instagram } from "lucide-react";
+import { ArrowLeft, Upload, X, ChevronDown, Play, MapPin, ExternalLink, Instagram, Image } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,13 +17,37 @@ interface ServiceFormProps {
   onSaved: () => void;
 }
 
+// Kateqoriyalar — min/max qiymət göstərilsin
+const MIN_MAX_PRICE_CATEGORIES = [
+  "wedding-hall", "banquet-hall",
+  "photographer", "videographer", "mobilograf",
+  "dj", "singer", "dance-group", "bride-assistant",
+];
+
+// Kateqoriyalar — şəhər/rayon göstərilsin
+const LOCATION_CATEGORIES = [
+  "wedding-hall", "banquet-hall",
+  "buket", "gelinlik-buketi", "xonca",
+  "car", "dress", "groom-suit", "beauty-salon",
+];
+
+// Kateqoriyalar — Google Maps ünvan göstərilsin
+const ADDRESS_CATEGORIES = ["wedding-hall", "banquet-hall", "dress", "car"];
+
+// Kateqoriyalar — menyu şəkilləri yükləmə
+const VENUE_MENU_CATEGORIES = ["wedding-hall", "banquet-hall"];
+
 const isBrideAssistant = (cat: string) => cat === "bride-assistant";
-const needsAddress = (cat: string) => ["wedding-hall", "banquet-hall", "dress", "car"].includes(cat);
+const needsMinMax = (cat: string) => MIN_MAX_PRICE_CATEGORIES.includes(cat);
+const needsLocation = (cat: string) => LOCATION_CATEGORIES.includes(cat);
+const needsAddress = (cat: string) => ADDRESS_CATEGORIES.includes(cat);
+const needsMenu = (cat: string) => VENUE_MENU_CATEGORIES.includes(cat);
+
 const isVideoFile = (url: string) => ["mp4", "mov", "webm", "avi"].includes(url.split(".").pop()?.toLowerCase() || "");
 
 // ── Meta parse/build ──────────────────────────────────────────────────────────
 const parseServiceMeta = (desc: string | null) => {
-  const empty = { cleanDesc: "", phone1: "", phone2: "", whatsapp: "", address: "", logoUrl: "", instagram: "", district: "", capacity: "", amenities: [] as string[], cuisines: [] as string[] };
+  const empty = { cleanDesc: "", phone1: "", phone2: "", whatsapp: "", address: "", logoUrl: "", instagram: "", district: "", capacity: "", amenities: [] as string[], cuisines: [] as string[], menuImages: [] as string[] };
   if (!desc) return empty;
   const sepIdx = desc.indexOf("\n---\n");
   const cleanDesc = sepIdx === -1 ? desc : desc.slice(0, sepIdx).trim();
@@ -48,6 +72,7 @@ const parseServiceMeta = (desc: string | null) => {
     capacityMax: get("TutumMax:"),
     amenities,
     cuisines,
+    menuImages: get("MenuImages:") ? get("MenuImages:").split("||").map(s => s.trim()).filter(Boolean) : [],
   };
 };
 
@@ -58,6 +83,7 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [menuUploading, setMenuUploading] = useState(false);
 
   const parsed = parseServiceMeta(service?.description ?? null);
 
@@ -81,6 +107,7 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
   const [district, setDistrict] = useState(parsed.district);
   const [capacity, setCapacity] = useState(parsed.capacity);
   const [capacityMax, setCapacityMax] = useState(parsed.capacityMax ?? "");
+  const [menuImages, setMenuImages] = useState<string[]>(parsed.menuImages);
 
   // Venue checkboxes — restored from saved data
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>(parsed.amenities);
@@ -99,7 +126,10 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
 
   const isVenue   = isVenueCategory(form.category);
   const isBa      = isBrideAssistant(form.category);
+  const showMinMax = needsMinMax(form.category);
+  const showLocation = needsLocation(form.category);
   const showAddress = needsAddress(form.category);
+  const showMenu = needsMenu(form.category);
 
   // ── Upload helpers ──────────────────────────────────────────────────────────
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,6 +166,28 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
     e.target.value = "";
   };
 
+  const handleMenuImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !user) return;
+    setMenuUploading(true);
+    const newImgs: string[] = [];
+    for (const file of Array.from(e.target.files)) {
+      if (!file.type.startsWith("image/")) { toast.error(`${file.name} şəkil deyil`); continue; }
+      if (file.size > 10 * 1024 * 1024) { toast.error(`${file.name} 10MB-dan böyükdür`); continue; }
+      const ext = file.name.split(".").pop();
+      const path = `${user.id}/menu-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from("service-images").upload(path, file);
+      if (error) { toast.error(`${file.name} yüklənmədi`); continue; }
+      const { data } = supabase.storage.from("service-images").getPublicUrl(path);
+      newImgs.push(data.publicUrl);
+    }
+    setMenuImages(prev => [...prev, ...newImgs]);
+    setMenuUploading(false);
+    if (newImgs.length > 0) toast.success("Menyu şəkli yükləndi!");
+    e.target.value = "";
+  };
+
+  const removeMenuImage = (i: number) => setMenuImages(prev => prev.filter((_, idx) => idx !== i));
+
   const removeMedia = (i: number) => setImages(prev => prev.filter((_, idx) => idx !== i));
 
   // ── Submit ──────────────────────────────────────────────────────────────────
@@ -171,6 +223,7 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
     if (capacityMax) meta.push(`TutumMax: ${capacityMax}`);
     if (selectedAmenities.length) meta.push(`Xidmətlər: ${selectedAmenities.join(" || ")}`);
     if (selectedCuisines.length)  meta.push(`Mətbəx: ${selectedCuisines.join(" || ")}`);
+    if (menuImages.length) meta.push(`MenuImages: ${menuImages.join(" || ")}`);
     description += meta.join("\n");
 
     const payload = {
@@ -178,8 +231,8 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
       description,
       category: form.category,
       price_min: form.price_min ? Number(form.price_min) : null,
-      price_max: form.price_max ? Number(form.price_max) : null,
-      location: form.location,
+      price_max: showMinMax && form.price_max ? Number(form.price_max) : null,
+      location: showLocation ? form.location : null,
       images,
       vendor_id: user.id,
       is_approved: false,
@@ -377,51 +430,77 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
         </div>
 
         {/* ── Price ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">
-              {isVenue ? t("minSeatPrice") : t("minPrice")} *
-            </label>
-            <input type="number" value={form.price_min} onChange={e => setForm({...form, price_min: e.target.value})}
-              className={inputCls} style={inputStyle} placeholder={isVenue ? "50" : "200"} min="0" required />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">
-              {isVenue ? t("maxSeatPrice") : t("maxPrice")}
-              <span className="text-xs text-muted-foreground ml-1">(İstəyə görə)</span>
-            </label>
-            <input type="number" value={form.price_max} onChange={e => setForm({...form, price_max: e.target.value})}
-              className={inputCls} style={inputStyle} placeholder={isVenue ? "150" : "1500"} min="0" />
-          </div>
-        </div>
-
-        {/* ── Location ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium text-foreground mb-1.5 block">Şəhər</label>
-            <div className="relative">
-              <select value={form.location} onChange={e => setForm({...form, location: e.target.value})}
-                className={`${inputCls} appearance-none`} style={inputStyle}>
-                <option value="">{t("select")}</option>
-                {cities.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        {showMinMax ? (
+          /* Min/Max qiymət — bu kateqoriyalar üçün */
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                {isVenue ? t("minSeatPrice") : "Minimum qiymət (₼)"} *
+              </label>
+              <input type="number" value={form.price_min} onChange={e => setForm({...form, price_min: e.target.value})}
+                className={inputCls} style={inputStyle} placeholder={isVenue ? "50" : "200"} min="0" required />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                {isVenue ? t("maxSeatPrice") : "Maksimum qiymət (₼)"}
+                <span className="text-xs text-muted-foreground ml-1">(İstəyə görə)</span>
+              </label>
+              <input type="number" value={form.price_max} onChange={e => setForm({...form, price_max: e.target.value})}
+                className={inputCls} style={inputStyle} placeholder={isVenue ? "150" : "1500"} min="0" />
             </div>
           </div>
-          {isVenue && form.location === "Bakı" && (
+        ) : (
+          /* Konkret qiymət — digər kateqoriyalar üçün */
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">
+              Qiymət (₼) *
+              <span className="text-xs text-muted-foreground font-normal ml-1">(Konkret məbləğ)</span>
+            </label>
+            <input
+              type="number"
+              value={form.price_min}
+              onChange={e => setForm({...form, price_min: e.target.value})}
+              className={inputCls}
+              style={inputStyle}
+              placeholder="Məs: 150"
+              min="0"
+              required={!!form.category}
+            />
+            <p className="text-xs text-muted-foreground mt-1.5">
+              💡 Xidmətinizin başlanğıc qiymətini daxil edin
+            </p>
+          </div>
+        )}
+
+        {/* ── Location — yalnız müvafiq kateqoriyalar üçün ── */}
+        {showLocation && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">Rayon</label>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Şəhər</label>
               <div className="relative">
-                <select value={district} onChange={e => setDistrict(e.target.value)}
+                <select value={form.location} onChange={e => setForm({...form, location: e.target.value})}
                   className={`${inputCls} appearance-none`} style={inputStyle}>
                   <option value="">{t("select")}</option>
-                  {bakuDistricts.map(d => <option key={d} value={d}>{d}</option>)}
+                  {cities.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               </div>
             </div>
-          )}
-        </div>
+            {form.location === "Bakı" && (
+              <div>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">Rayon</label>
+                <div className="relative">
+                  <select value={district} onChange={e => setDistrict(e.target.value)}
+                    className={`${inputCls} appearance-none`} style={inputStyle}>
+                    <option value="">{t("select")}</option>
+                    {bakuDistricts.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Address + Map ── */}
         {showAddress && (
@@ -538,6 +617,38 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
               </div>
             </div>
           </>
+        )}
+
+        {/* ── Menyu şəkilləri — yalnız toy/banket zalları üçün ── */}
+        {showMenu && (
+          <div className="rounded-xl p-5" style={sectionStyle}>
+            <label className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2 block">
+              <Image className="w-4 h-4 text-primary" />
+              Menyu / Qiymət siyahısı şəkilləri
+              <span className="text-xs text-muted-foreground font-normal">(İstəyə görə)</span>
+            </label>
+            <p className="text-xs text-muted-foreground mb-3">
+              Menyunuzu, qiymət siyahınızı və ya zal şəkillərini yükləyin. Müştərilər detallarda görə bilər. Bir neçə şəkil əlavə edə bilərsiniz.
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+              {menuImages.map((img, i) => (
+                <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-border">
+                  <img src={img} alt="" className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => removeMenuImage(i)}
+                    className="absolute top-1 right-1 w-6 h-6 bg-foreground/70 text-background rounded-full flex items-center justify-center">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              <label className="aspect-square rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-primary/40 transition-colors">
+                {menuUploading
+                  ? <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  : <><Upload className="w-6 h-6 text-muted-foreground mb-1" /><span className="text-xs text-muted-foreground">Şəkil əlavə et</span></>
+                }
+                <input type="file" accept="image/*" multiple onChange={handleMenuImageUpload} className="hidden" disabled={menuUploading} />
+              </label>
+            </div>
+          </div>
         )}
 
         {/* ── Media ── */}
