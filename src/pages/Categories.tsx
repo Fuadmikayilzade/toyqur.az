@@ -334,35 +334,6 @@ const Categories = () => {
             </p>
           </div>
 
-          {/* Category chips — wrap on desktop, scroll on mobile */}
-          <div className="relative mb-6">
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => handleCatChange("")}
-                className="flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all"
-                style={!selectedCat
-                  ? { background: "hsl(16 38% 48%)", color: "#fff" }
-                  : { background: "hsl(28 38% 97%)", border: "1px solid hsl(25 28% 87%)", color: "hsl(20 18% 40%)" }
-                }
-              >
-                Hamısı
-              </button>
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => handleCatChange(cat.id === selectedCat ? "" : cat.id)}
-                  className="flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all"
-                  style={selectedCat === cat.id
-                    ? { background: "hsl(16 38% 48%)", color: "#fff" }
-                    : { background: "hsl(28 38% 97%)", border: "1px solid hsl(25 28% 87%)", color: "hsl(20 18% 40%)" }
-                  }
-                >
-                  {t(`cat.${cat.id}`) || cat.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Toolbar: search + filter toggle + sort */}
           <div className="flex flex-wrap items-center gap-3 mb-5">
             {/* Search bar */}
