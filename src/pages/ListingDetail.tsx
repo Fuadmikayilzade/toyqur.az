@@ -75,10 +75,11 @@ const formatPrice = (min: number | null, max: number | null) => {
 };
 
 // ── Horizontal slider for related/mixed services ──
-const DetailSlider = ({ title, items, accentColor = "hsl(16 38% 48%)" }: {
+const DetailSlider = ({ title, items, accentColor = "hsl(16 38% 48%)", viewAllLink }: {
   title: string;
   items: Array<{ id: string; title: string; category: string; location: string | null; price_min: number | null; price_max: number | null; rating: number | null; review_count: number | null; images: string[] | null; description: string | null }>;
   accentColor?: string;
+  viewAllLink?: string;
 }) => {
   const { t } = useLanguage();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -99,10 +100,19 @@ const DetailSlider = ({ title, items, accentColor = "hsl(16 38% 48%)" }: {
 
   return (
     <div className="mb-10">
-      <h2 className="text-lg font-serif font-bold text-foreground mb-5 flex items-center gap-2">
-        <span className="w-1 h-5 rounded-full inline-block" style={{ background: accentColor }} />
-        {title}
-      </h2>
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-lg font-serif font-bold text-foreground flex items-center gap-2">
+          <span className="w-1 h-5 rounded-full inline-block" style={{ background: accentColor }} />
+          {title}
+        </h2>
+        {viewAllLink && (
+          <Link to={viewAllLink}
+            className="text-sm font-medium hover:opacity-70 transition-opacity flex-shrink-0 ml-4"
+            style={{ color: "hsl(16 38% 44%)" }}>
+            Hamısını gör →
+          </Link>
+        )}
+      </div>
       <div className="relative group">
         {canLeft && (
           <button onClick={() => scroll("left")}
@@ -198,21 +208,22 @@ const ListingDetail = () => {
   useEffect(() => {
     if (!service) return;
     const venueCategories = ["wedding-hall", "banquet-hall"];
-    const excludeCats = [...venueCategories, service.category];
 
-    // Similar: same category, exclude current
+    // Similar: same category, exclude current service
     supabase.from("services").select("*")
       .eq("category", service.category)
       .eq("is_approved", true)
       .neq("id", service.id)
       .then(({ data }) => setSimilarServices(data || []));
 
-    // Mixed: other categories, exclude venues, exclude current category
+    // Mixed: other categories, exclude venues AND current category, exclude current service
     supabase.from("services").select("*")
       .eq("is_approved", true)
       .neq("id", service.id)
       .then(({ data }) => {
-        const filtered = (data || []).filter(s => !excludeCats.includes(s.category));
+        const filtered = (data || []).filter(
+          s => !venueCategories.includes(s.category) && s.category !== service.category
+        );
         setMixedServices(filtered);
       });
   }, [service]);
@@ -763,40 +774,25 @@ const ListingDetail = () => {
               title={`${t(`cat.${service?.category}`) || categories.find(c => c.id === service?.category)?.name} — ${t("similarProducts")}`}
               items={similarServices}
               accentColor="hsl(16 38% 48%)"
+              viewAllLink={`/categories?cat=${service?.category}`}
             />
           </div>
         </div>
       )}
 
-      {/* Mixed products — grouped by category, each as slider */}
-      {mixedServices.length > 0 && (() => {
-        const map = new Map<string, typeof mixedServices>();
-        for (const s of mixedServices) {
-          if (!map.has(s.category)) map.set(s.category, []);
-          map.get(s.category)!.push(s);
-        }
-        const ordered = categories
-          .filter(c => map.has(c.id))
-          .map(c => ({ catId: c.id, items: map.get(c.id)! }));
-        const inList = new Set(ordered.map(o => o.catId));
-        for (const [catId, items] of map.entries()) {
-          if (!inList.has(catId)) ordered.push({ catId, items });
-        }
-        return (
-          <div className="pb-16" style={{ background: "hsl(28 38% 98%)" }}>
-            <div className="container mx-auto px-4">
-              {ordered.map(({ catId, items }) => (
-                <DetailSlider
-                  key={catId}
-                  title={t(`cat.${catId}`) || catId}
-                  items={items}
-                  accentColor="hsl(25 35% 65%)"
-                />
-              ))}
-            </div>
+      {/* Mixed products — single mixed slider */}
+      {mixedServices.length > 0 && (
+        <div className="pb-16" style={{ background: "hsl(28 38% 98%)" }}>
+          <div className="container mx-auto px-4">
+            <DetailSlider
+              title={t("otherProducts")}
+              items={mixedServices}
+              accentColor="hsl(25 35% 65%)"
+              viewAllLink="/categories"
+            />
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       <Footer />
     </div>
