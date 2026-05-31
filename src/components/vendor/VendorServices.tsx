@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Pencil, Trash2, Image as ImageIcon, Calendar, CheckCircle, Clock, Store, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,6 +43,7 @@ const VendorServices = ({ profileComplete = true }: VendorServicesProps) => {
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [storeReady, setStoreReady] = useState<boolean | null>(null);
   const [showBrandSetup, setShowBrandSetup] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchServices = async () => {
     if (!user) return;
@@ -57,6 +59,19 @@ const VendorServices = ({ profileComplete = true }: VendorServicesProps) => {
   };
 
   useEffect(() => { fetchServices(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-open add form if ?add=1 in URL — wait until store data is loaded
+  useEffect(() => {
+    if (!loading && storeReady !== null && searchParams.get("add") === "1") {
+      setSearchParams({}, { replace: true });
+      if (storeReady) {
+        setShowForm(true);
+      } else {
+        setShowBrandSetup(true);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, storeReady]);
 
   const handleAddService = () => {
     if (!profileComplete) { toast.error(t("profileFillRequired")); return; }

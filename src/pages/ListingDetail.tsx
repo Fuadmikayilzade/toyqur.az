@@ -360,13 +360,13 @@ const ListingDetail = () => {
                 <>
                   <button
                     onClick={() => setSelectedImg(i => (i - 1 + images.length) % images.length)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
                     style={{ background: "hsl(16 38% 38%)" }}>
                     <ChevronLeft className="w-4 h-4 text-white" />
                   </button>
                   <button
                     onClick={() => setSelectedImg(i => (i + 1) % images.length)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
                     style={{ background: "hsl(16 38% 38%)" }}>
                     <ChevronRight className="w-4 h-4 text-white" />
                   </button>
@@ -395,48 +395,39 @@ const ListingDetail = () => {
                 </div>
               )}
 
-              {/* ── Menyu FAB — venue only ── */}
-              {isVenue && (menuImages.length > 0 || menuPdfUrl) && (
+              {/* ── Menyu / Qiymət paketləri FAB ── */}
+              {menuImages.length > 0 && (
                 <div className="mt-5 flex justify-center">
-                  {menuImages.length > 0 ? (
-                    <button
-                      onClick={() => { setMenuOpen(true); setMenuActiveIdx(0); }}
-                      className="group flex flex-col items-center gap-3"
-                    >
-                      <div className="relative">
-                        <div className="absolute inset-0 rounded-full opacity-20 animate-pulse"
-                          style={{ background: "hsl(16 38% 48%)", transform: "scale(1.18)" }} />
-                        <div className="relative w-28 h-28 rounded-full flex items-center justify-center overflow-hidden transition-transform duration-300 group-hover:scale-105"
-                          style={{
-                            background: logoUrl ? "transparent" : "linear-gradient(135deg, hsl(16 38% 38%), hsl(20 45% 28%))",
-                            boxShadow: "0 8px 32px hsl(16 38% 38%/0.45)",
-                            border: "3px solid hsl(16 38% 52%)",
-                          }}>
-                          {logoUrl
-                            ? <img src={logoUrl} alt="logo" className="w-full h-full object-cover" />
-                            : <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.4" className="w-10 h-10"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
-                          }
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                            style={{ background: "rgba(0,0,0,0.38)" }}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" className="w-8 h-8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
-                          </div>
+                  <button
+                    onClick={() => { setMenuOpen(true); setMenuActiveIdx(0); }}
+                    className="group flex flex-col items-center gap-3"
+                  >
+                    <div className="relative">
+                      <div className="absolute inset-0 rounded-full opacity-20 animate-pulse"
+                        style={{ background: "hsl(16 38% 48%)", transform: "scale(1.18)" }} />
+                      <div className="relative w-28 h-28 rounded-full flex items-center justify-center overflow-hidden transition-transform duration-300 group-hover:scale-105"
+                        style={{
+                          background: logoUrl ? "transparent" : "linear-gradient(135deg, hsl(16 38% 38%), hsl(20 45% 28%))",
+                          boxShadow: "0 8px 32px hsl(16 38% 38%/0.45)",
+                          border: "3px solid hsl(16 38% 52%)",
+                        }}>
+                        {logoUrl
+                          ? <img src={logoUrl} alt="logo" className="w-full h-full object-cover" />
+                          : <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.4" className="w-10 h-10"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
+                        }
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ background: "rgba(0,0,0,0.38)" }}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" className="w-8 h-8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg>
                         </div>
                       </div>
-                      <div className="flex flex-col items-center gap-0.5">
-                        <span className="text-sm font-bold" style={{ color: "hsl(16 38% 36%)" }}>Menyu & Qiymətlər</span>
-                        <span className="text-xs" style={{ color: "hsl(20 12% 55%)" }}>{menuImages.length} şəkil</span>
-                      </div>
-                    </button>
-                  ) : (
-                    <a href={menuPdfUrl} target="_blank" rel="noopener noreferrer"
-                      className="group relative flex items-center justify-center w-28 h-28 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 overflow-hidden"
-                      style={{ background: "linear-gradient(135deg, hsl(16 38% 48%), hsl(20 50% 38%))", boxShadow: "0 4px 20px hsl(16 38% 48%/0.45)", border: "3px solid hsl(16 38% 52%)" }}>
-                      {logoUrl
-                        ? <img src={logoUrl} alt="logo" className="w-full h-full object-cover" />
-                        : <FileText className="w-12 h-12 text-white" />
-                      }
-                    </a>
-                  )}
+                    </div>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="text-sm font-bold" style={{ color: "hsl(16 38% 36%)" }}>
+                        {isVenue ? "Menyu & Qiymətlər" : "Qiymət paketləri"}
+                      </span>
+                      <span className="text-xs" style={{ color: "hsl(20 12% 55%)" }}>{menuImages.length} şəkil</span>
+                    </div>
+                  </button>
                 </div>
               )}
 
@@ -864,36 +855,67 @@ const ListingDetail = () => {
 
       {/* ── Menyu Modal ── */}
       {menuOpen && menuImages.length > 0 && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-          style={{ background: "rgba(10,6,4,0.92)", backdropFilter: "blur(8px)" }}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-6"
+          style={{ background: "rgba(10,6,4,0.94)", backdropFilter: "blur(10px)" }}
           onClick={() => setMenuOpen(false)}>
           <div className="relative w-full max-w-3xl" onClick={e => e.stopPropagation()}>
+
+            {/* Close button — visible on all screens */}
             <button onClick={() => setMenuOpen(false)}
-              className="absolute -top-12 right-0 flex items-center gap-1.5 text-white/70 hover:text-white text-sm font-medium">
-              <X className="w-5 h-5" /> Bağla
+              className="absolute -top-10 right-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold z-10"
+              style={{ background: "hsl(16 38% 38%)", color: "white" }}>
+              <X className="w-4 h-4" /> Bağla
             </button>
-            <div className="rounded-2xl overflow-hidden shadow-2xl" style={{ background: "hsl(20 15% 10%)" }}>
+
+            {/* Main image with left/right nav */}
+            <div className="relative rounded-2xl overflow-hidden shadow-2xl" style={{ background: "hsl(20 15% 10%)" }}>
               <img src={menuImages[menuActiveIdx]} alt={`Menyu ${menuActiveIdx + 1}`}
-                className="w-full max-h-[75vh] object-contain" />
-            </div>
-            <div className="flex items-center gap-4 mt-4">
-              {logoUrl && (
-                <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2"
-                  style={{ borderColor: "hsl(16 38% 48%)" }}>
-                  <img src={logoUrl} alt="logo" className="w-full h-full object-cover" />
-                </div>
-              )}
-              <div className="flex gap-2 overflow-x-auto flex-1 pb-1" style={{ scrollbarWidth: "none" }}>
-                {menuImages.map((url, i) => (
-                  <button key={i} onClick={() => setMenuActiveIdx(i)}
-                    className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 transition-all"
-                    style={{ border: menuActiveIdx === i ? "2.5px solid hsl(16 38% 52%)" : "2.5px solid transparent", opacity: menuActiveIdx === i ? 1 : 0.5 }}>
-                    <img src={url} alt="" className="w-full h-full object-cover" />
+                className="w-full max-h-[72vh] object-contain block" />
+
+              {menuImages.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setMenuActiveIdx(i => (i - 1 + menuImages.length) % menuImages.length)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+                    style={{ background: "hsl(16 38% 38%)" }}>
+                    <ChevronLeft className="w-4 h-4 text-white" />
                   </button>
-                ))}
+                  <button
+                    onClick={() => setMenuActiveIdx(i => (i + 1) % menuImages.length)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center shadow-lg"
+                    style={{ background: "hsl(16 38% 38%)" }}>
+                    <ChevronRight className="w-4 h-4 text-white" />
+                  </button>
+                </>
+              )}
+
+              {/* Counter overlay */}
+              <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-full text-xs font-medium"
+                style={{ background: "rgba(0,0,0,0.6)", color: "white" }}>
+                {menuActiveIdx + 1} / {menuImages.length}
               </div>
-              <span className="text-white/50 text-xs flex-shrink-0">{menuActiveIdx + 1}/{menuImages.length}</span>
             </div>
+
+            {/* Thumbnails row */}
+            {menuImages.length > 1 && (
+              <div className="flex items-center gap-3 mt-3">
+                {logoUrl && (
+                  <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2"
+                    style={{ borderColor: "hsl(16 38% 48%)" }}>
+                    <img src={logoUrl} alt="logo" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="flex gap-2 overflow-x-auto flex-1 pb-1" style={{ scrollbarWidth: "none" }}>
+                  {menuImages.map((url, i) => (
+                    <button key={i} onClick={() => setMenuActiveIdx(i)}
+                      className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 transition-all"
+                      style={{ border: menuActiveIdx === i ? "2.5px solid hsl(16 38% 52%)" : "2.5px solid transparent", opacity: menuActiveIdx === i ? 1 : 0.55 }}>
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

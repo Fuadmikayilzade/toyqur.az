@@ -8,6 +8,7 @@ import { categories } from "@/data/mockData";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [catOpen, setCatOpen] = useState(false);
   const { user, role, profile, signOut } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -29,15 +30,16 @@ const Navbar = () => {
           <div className="hidden md:flex items-center gap-8">
             <Link to="/" className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors">{t("home")}</Link>
             {/* Categories mega menu */}
-            <div className="relative group">
+            <div className="relative" onMouseEnter={() => setCatOpen(true)} onMouseLeave={() => setCatOpen(false)}>
               <Link to="/categories" className="flex items-center gap-1 text-sm font-medium text-foreground/70 hover:text-primary transition-colors py-2">
                 {t("categories")}
-                <ChevronDown className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-180" />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${catOpen ? "rotate-180" : ""}`} />
               </Link>
 
               {/* Mega dropdown */}
+              {catOpen && (
               <div
-                className="absolute top-full left-1/2 -translate-x-1/2 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50"
+                className="absolute top-full left-1/2 -translate-x-1/2 z-50 pt-1"
                 style={{ minWidth: 560 }}
               >
                 <div
@@ -76,6 +78,7 @@ const Navbar = () => {
                   </div>
                 </div>
               </div>
+              )}
             </div>
             <Link to="/about" className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors">{t("about")}</Link>
             <Link to="/blog" className="text-sm font-medium text-foreground/70 hover:text-primary transition-colors">Blog</Link>

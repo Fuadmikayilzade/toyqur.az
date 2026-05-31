@@ -35,7 +35,9 @@ const LOCATION_CATEGORIES = [
 const ADDRESS_CATEGORIES = ["wedding-hall", "banquet-hall", "dress", "car"];
 
 // Kateqoriyalar — menyu şəkilləri yükləmə
+// All categories can have price/menu images
 const VENUE_MENU_CATEGORIES = ["wedding-hall", "banquet-hall"];
+const ALL_MENU_CATEGORIES = true; // show for all
 
 const isBrideAssistant = (cat: string) => cat === "bride-assistant";
 const needsMinMax = (cat: string) => MIN_MAX_PRICE_CATEGORIES.includes(cat);
@@ -129,7 +131,7 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
   const showMinMax = needsMinMax(form.category);
   const showLocation = needsLocation(form.category);
   const showAddress = needsAddress(form.category);
-  const showMenu = needsMenu(form.category);
+  const showMenu = true; // all categories can add price/menu images
 
   // ── Upload helpers ──────────────────────────────────────────────────────────
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -624,11 +626,11 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
           <div className="rounded-xl p-5" style={sectionStyle}>
             <label className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2 block">
               <Image className="w-4 h-4 text-primary" />
-              Menyu / Qiymət siyahısı şəkilləri
+              {isVenue ? "Menyu & Qiymətlər" : "Qiymət paketləri"}
               <span className="text-xs text-muted-foreground font-normal">(İstəyə görə)</span>
             </label>
             <p className="text-xs text-muted-foreground mb-3">
-              Menyunuzu, qiymət siyahınızı və ya zal şəkillərini yükləyin. Müştərilər detallarda görə bilər. Bir neçə şəkil əlavə edə bilərsiniz.
+              {isVenue ? "Menyunuzu və qiymət siyahınızı şəkil kimi yükləyin." : "Xidmət paketlərinizi, qiymət cədvəllərinizi şəkil kimi yükləyin."} Müştərilər məhsul səhifəsində görəcək.
             </p>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
               {menuImages.map((img, i) => (

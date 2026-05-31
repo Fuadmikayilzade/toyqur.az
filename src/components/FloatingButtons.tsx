@@ -55,7 +55,7 @@ const FloatingButtons = () => {
       );
       return;
     }
-    navigate("/vendor");
+    navigate("/vendor?add=1");
   };
 
   return (

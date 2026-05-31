@@ -172,6 +172,8 @@ const Categories = () => {
   const [guestCount, setGuestCount] = useState("");
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
+  const [guestMin, setGuestMin] = useState("");
+  const [guestMax, setGuestMax] = useState("");
 
   const SORT_OPTIONS: { value: SortOption; label: string; icon: typeof Clock }[] = [
     { value: "newest", label: t("sortNewest"), icon: Clock },
@@ -184,6 +186,14 @@ const Categories = () => {
   const [loading, setLoading] = useState(true);
 
   const isVenue = isVenueCategory(selectedCat);
+  const isLocationCat = ["buket", "gelinlik-buketi"].includes(selectedCat);
+  const showLocationFilter = isVenue || isLocationCat || !selectedCat;
+
+  // Sync state with URL params (when navigating from Navbar)
+  useEffect(() => {
+    const catFromUrl = searchParams.get("cat") || "";
+    setSelectedCat(catFromUrl);
+  }, [searchParams]);
 
   // Update URL params when category changes
   const handleCatChange = useCallback((catId: string) => {
@@ -242,6 +252,8 @@ const Categories = () => {
     setSelectedLocation("");
     setSelectedDistrict("");
     setGuestCount("");
+    setGuestMin("");
+    setGuestMax("");
     setSelectedAmenities([]);
     setSelectedCuisines([]);
     setSortBy("newest");
@@ -253,7 +265,7 @@ const Categories = () => {
   const toggleCuisine = (c: string) =>
     setSelectedCuisines((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
 
-  const hasActiveFilters = !!(selectedCat || query || priceMin || priceMax || selectedLocation ||
+  const hasActiveFilters = !!(selectedCat || query || priceMin || priceMax || selectedLocation || guestMin || guestMax ||
     guestCount || selectedDistrict || selectedAmenities.length || selectedCuisines.length || sortBy !== "newest");
 
   const selectCls = "w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none transition-colors";
@@ -308,9 +320,9 @@ const Categories = () => {
       <div className="pt-36 md:pt-28 pb-16">
         <div className="container mx-auto px-4">
           <div className="flex gap-8 items-start">
-          <div className="hidden md:block w-48 flex-shrink-0 sticky top-32">
+          <div className="hidden md:block w-48 flex-shrink-0 sticky top-32 self-start">
             <p className="text-xs uppercase tracking-widest font-semibold mb-3" style={{ color: "hsl(20 15% 58%)" }}>Kateqoriyalar</p>
-            <div className="space-y-0.5">
+            <div className="space-y-0.5" style={{ overflowY: "auto", maxHeight: "80vh", scrollbarWidth: "thin" }}>
               <button onClick={() => handleCatChange("")} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left"
                 style={!selectedCat ? { background: "hsl(16 38% 42%)", color: "#fff" } : { color: "hsl(20 18% 38%)" }}>✦ Hamısı</button>
               {categories.map((cat) => (
@@ -445,6 +457,7 @@ const Categories = () => {
                 </div>
 
                 {/* Location */}
+                {showLocationFilter && (
                 <div>
                   <label className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5" /> Şəhər
@@ -462,6 +475,7 @@ const Categories = () => {
                     <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                   </div>
                 </div>
+                )}
 
                 {/* Baku district */}
                 {selectedLocation === "Bakı" && (
@@ -485,17 +499,31 @@ const Categories = () => {
                     <label className="text-sm font-medium text-foreground mb-2 flex items-center gap-1.5">
                       <Users className="w-3.5 h-3.5" /> Qonaq sayı
                     </label>
-                    <div className="relative">
-                      <select value={guestCount} onChange={(e) => setGuestCount(e.target.value)} className={selectCls} style={fieldStyle}>
-                        <option value="">{t("select")}</option>
-                        <option value="50">{t("cap50")}</option>
-                        <option value="100">50–100</option>
-                        <option value="200">100–200</option>
-                        <option value="300">200–300</option>
-                        <option value="500">300–500</option>
-                        <option value="1000">500+</option>
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-1 block">Min</label>
+                        <input
+                          type="number"
+                          value={guestMin}
+                          onChange={e => setGuestMin(e.target.value)}
+                          className={selectCls}
+                          style={fieldStyle}
+                          placeholder="50"
+                          min="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground mb-1 block">Max</label>
+                        <input
+                          type="number"
+                          value={guestMax}
+                          onChange={e => setGuestMax(e.target.value)}
+                          className={selectCls}
+                          style={fieldStyle}
+                          placeholder="500"
+                          min="0"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
