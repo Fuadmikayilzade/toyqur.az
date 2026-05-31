@@ -12,6 +12,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { categories } from "@/data/mockData";
 
+const isVideoUrl = (url: string) => /\.(mp4|mov|webm|avi|mkv)(\?|$)/i.test(url);
+
 interface Service {
   id: string;
   title: string;
@@ -25,6 +27,7 @@ interface Service {
   description: string | null;
   images: string[] | null;
   approved_at: string | null;
+  menu_approved?: boolean | null;
   listing_code: string | null;
 }
 
@@ -99,6 +102,20 @@ const AdminDashboard = () => {
     if (error) { toast.error("Xəta baş verdi"); return; }
     toast.success("Xidmət rədd edildi");
     setServices((prev) => prev.map((s) => s.id === id ? { ...s, is_approved: false, approved_at: null } : s));
+  };
+
+  const approveMenuImages = async (id: string) => {
+    const { error } = await supabase.from("services").update({ menu_approved: true } as any).eq("id", id);
+    if (error) { toast.error("Xəta baş verdi"); return; }
+    toast.success("Menyu/Qiymət şəkilləri təsdiqləndi");
+    setServices((prev) => prev.map((s) => s.id === id ? { ...s, menu_approved: true } : s));
+  };
+
+  const rejectMenuImages = async (id: string) => {
+    const { error } = await supabase.from("services").update({ menu_approved: false, menu_images: null } as any).eq("id", id);
+    if (error) { toast.error("Xəta baş verdi"); return; }
+    toast.success("Menyu şəkilləri rədd edildi");
+    setServices((prev) => prev.map((s) => s.id === id ? { ...s, menu_approved: false } : s));
   };
 
   const deleteService = async (id: string) => {
@@ -243,6 +260,65 @@ const AdminDashboard = () => {
                 </p>
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                   {s.images.map((img, i) => (
+                    <a key={i} href={img} target="_blank" rel="noopener noreferrer"
+                      className="aspect-square rounded-lg overflow-hidden border border-border relative bg-muted">
+                      {isVideoUrl(img) ? (
+                        <>
+                          <video
+                            src={img}
+                            className="w-full h-full object-cover"
+                            muted
+                            playsInline
+                            preload="metadata"
+                            onLoadedMetadata={e => {
+                              const v = e.currentTarget;
+                              if (v.duration > 0) v.currentTime = Math.min(0.5, v.duration * 0.05);
+                            }}
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)" }}>
+                              <svg viewBox="0 0 24 24" fill="white" className="w-3.5 h-3.5 ml-0.5"><path d="M8 5v14l11-7z"/></svg>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <img src={img} alt="" className="w-full h-full object-cover" />
+                      )}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Menu / Price images — needs approval */}
+            {(s as any).menu_images && (s as any).menu_images.length > 0 && (
+              <div className="rounded-xl p-3" style={{ background: (s as any).menu_approved ? "hsl(142 50% 96%)" : "hsl(38 90% 95%)", border: `1px solid ${(s as any).menu_approved ? "hsl(142 40% 80%)" : "hsl(38 60% 78%)"}` }}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold flex items-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    {["wedding-hall","banquet-hall"].includes(s.category) ? "Menyu & Qiymətlər" : "Qiymət paketləri"}
+                    <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${(s as any).menu_approved ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                      {(s as any).menu_approved ? "Təsdiqlənib" : "Gözləyir"}
+                    </span>
+                  </p>
+                  {!(s as any).menu_approved && (
+                    <div className="flex gap-1.5">
+                      <Button size="sm" onClick={() => approveMenuImages(s.id)} className="h-7 px-2 text-xs rounded-lg">
+                        <Check className="w-3 h-3 mr-1" /> Təsdiqlə
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => rejectMenuImages(s.id)} className="h-7 px-2 text-xs rounded-lg border-red-200 text-red-600 hover:bg-red-50">
+                        <X className="w-3 h-3 mr-1" /> Rədd et
+                      </Button>
+                    </div>
+                  )}
+                  {(s as any).menu_approved && (
+                    <Button size="sm" variant="outline" onClick={() => rejectMenuImages(s.id)} className="h-7 px-2 text-xs rounded-lg">
+                      <X className="w-3 h-3 mr-1" /> Geri al
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {(s as any).menu_images.map((img: string, i: number) => (
                     <a key={i} href={img} target="_blank" rel="noopener noreferrer"
                       className="aspect-square rounded-lg overflow-hidden border border-border">
                       <img src={img} alt="" className="w-full h-full object-cover" />

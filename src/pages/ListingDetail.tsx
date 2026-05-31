@@ -293,7 +293,8 @@ const ListingDetail = () => {
   const { cleanDesc, phones, address, logoUrl, instagram, district, capacity, amenities, cuisines, whatsapp: metaWA, menuPdfUrl } = parseServiceMeta(service.description);
 
   const isVenue = ["wedding-hall", "banquet-hall"].includes(service.category);
-  const menuImages: string[] = (service as any)?.menu_images || [];
+  const menuApproved: boolean = (service as any)?.menu_approved === true;
+  const menuImages: string[] = menuApproved ? ((service as any)?.menu_images || []) : [];
   const catInfo = categories.find((c) => c.id === service.category);
 
   // Build WhatsApp message in current language
