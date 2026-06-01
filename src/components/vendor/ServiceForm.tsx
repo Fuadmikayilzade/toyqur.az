@@ -197,7 +197,6 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
     e.preventDefault();
     if (!user) return;
     // Edit limit check
-    if (service && (service.edit_count ?? 0) >= 2) { toast.error(t("editLimitReached")); return; }
     if (!form.title || !form.category) { toast.error(t("fieldRequired")); return; }
     if (!form.price_min) { toast.error(t("priceRequired")); return; }
     if (!phone1) { toast.error(t("phoneRequired2")); return; }
@@ -630,7 +629,7 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
               <span className="text-xs text-muted-foreground font-normal">(İstəyə görə)</span>
             </label>
             <p className="text-xs text-muted-foreground mb-3">
-              {isVenue ? "Menyunuzu və qiymət siyahınızı şəkil kimi yükləyin." : "Xidmət paketlərinizi, qiymət cədvəllərinizi şəkil kimi yükləyin."} Müştərilər məhsul səhifəsində görəcək.
+              {isVenue ? "Menyunuzu, qiymət siyahınızı və ya zal şəkillərini yükləyin." : "Xidmət paketlərinizi, qiymət cədvəllerinizi şəkil şəklində yükləyin."} Müştərilər məhsul səhifəsində görəcək.
             </p>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
               {menuImages.map((img, i) => (
