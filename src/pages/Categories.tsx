@@ -13,6 +13,7 @@ import { cities, bakuDistricts, isVenueCategory, venueAmenities, cuisineTypes } 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { CATEGORY_FILTERS, matchesCategoryFilters } from "@/data/categoryFilters";
 
 // Returns first media (image or video) — whatever was uploaded first
 const firstImage = (images?: string[] | null): string => images?.[0] || "/placeholder.svg";
@@ -174,6 +175,18 @@ const Categories = () => {
   const [selectedCuisines, setSelectedCuisines] = useState<string[]>([]);
   const [guestMin, setGuestMin] = useState("");
   const [guestMax, setGuestMax] = useState("");
+  const [catFilterValues, setCatFilterValues] = useState<Record<string, string | string[] | boolean>>({});
+
+  const setCatFilter = (key: string, value: string | string[] | boolean) =>
+    setCatFilterValues(prev => ({ ...prev, [key]: value }));
+
+  const toggleCatMultiFilter = (key: string, val: string) =>
+    setCatFilterValues(prev => {
+      const arr = (prev[key] as string[]) || [];
+      return { ...prev, [key]: arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val] };
+    });
+
+  const currentCatFilters = CATEGORY_FILTERS[selectedCat] || [];
 
   const SORT_OPTIONS: { value: SortOption; label: string; icon: typeof Clock }[] = [
     { value: "newest", label: t("sortNewest"), icon: Clock },
@@ -198,6 +211,7 @@ const Categories = () => {
   // Update URL params when category changes
   const handleCatChange = useCallback((catId: string) => {
     setSelectedCat(catId);
+    setCatFilterValues({}); // Reset category filters on cat change
     const params = new URLSearchParams(searchParams);
     if (catId) params.set("cat", catId);
     else params.delete("cat");
@@ -226,7 +240,9 @@ const Categories = () => {
       const matchLocation = !selectedLocation || s.location === selectedLocation;
       const matchPriceMin = !priceMin || (s.price_min !== null && s.price_min >= Number(priceMin));
       const matchPriceMax = !priceMax || (s.price_min !== null && s.price_min <= Number(priceMax));
-      return matchCat && matchQ && matchLocation && matchPriceMin && matchPriceMax;
+      const hasCatFilters = Object.values(catFilterValues).some(v => v !== "" && v !== false && (!Array.isArray(v) || v.length > 0));
+      const matchCatFilters = !hasCatFilters || matchesCategoryFilters(s.description, s.category, catFilterValues);
+      return matchCat && matchQ && matchLocation && matchPriceMin && matchPriceMax && matchCatFilters;
     });
 
     // Sort
@@ -242,7 +258,7 @@ const Categories = () => {
     });
 
     return result;
-  }, [selectedCat, query, selectedLocation, priceMin, priceMax, sortBy, services]);
+  }, [selectedCat, query, selectedLocation, priceMin, priceMax, sortBy, services, catFilterValues]);
 
   const clearFilters = () => {
     setSelectedCat("");
@@ -256,6 +272,7 @@ const Categories = () => {
     setGuestMax("");
     setSelectedAmenities([]);
     setSelectedCuisines([]);
+    setCatFilterValues({});
     setSortBy("newest");
     setSearchParams({}, { replace: true });
   };
@@ -266,7 +283,8 @@ const Categories = () => {
     setSelectedCuisines((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
 
   const hasActiveFilters = !!(selectedCat || query || priceMin || priceMax || selectedLocation || guestMin || guestMax ||
-    guestCount || selectedDistrict || selectedAmenities.length || selectedCuisines.length || sortBy !== "newest");
+    guestCount || selectedDistrict || selectedAmenities.length || selectedCuisines.length || sortBy !== "newest" ||
+    Object.values(catFilterValues).some(v => v !== "" && v !== false && (!Array.isArray(v) || v.length > 0)));
 
   const selectCls = "w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none transition-colors";
   const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors";
@@ -556,6 +574,86 @@ const Categories = () => {
                   </div>
                 </div>
               )}
+              {/* Kateqoriya-spesifik filtrlər */}
+              {currentCatFilters.length > 0 && (
+                <div className="mt-6 pt-5 border-t border-border">
+                  <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                    🔍 {categories.find(c => c.id === selectedCat)?.name || ""} Filtrləri
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {currentCatFilters.map(field => (
+                      <div key={field.key}>
+                        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">{field.label}</label>
+
+                        {field.type === "select" && (
+                          <div className="relative">
+                            <select
+                              value={(catFilterValues[field.key] as string) || ""}
+                              onChange={e => setCatFilter(field.key, e.target.value)}
+                              className={selectCls}
+                              style={fieldStyle}
+                            >
+                              <option value="">Hamısı</option>
+                              {field.options?.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                          </div>
+                        )}
+
+                        {field.type === "multiselect" && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {field.options?.map(opt => {
+                              const arr = (catFilterValues[field.key] as string[]) || [];
+                              const active = arr.includes(opt.value);
+                              return (
+                                <button
+                                  key={opt.value}
+                                  onClick={() => toggleCatMultiFilter(field.key, opt.value)}
+                                  className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                                  style={active ? {
+                                    background: "hsl(16 38% 44%)",
+                                    color: "white",
+                                    border: "1px solid hsl(16 38% 44%)",
+                                  } : {
+                                    background: "hsl(28 38% 97%)",
+                                    color: "hsl(20 20% 40%)",
+                                    border: "1px solid hsl(25 28% 86%)",
+                                  }}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {field.type === "boolean" && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setCatFilter(field.key, catFilterValues[field.key] === true ? "" : true)}
+                              className="px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+                              style={catFilterValues[field.key] === true ? {
+                                background: "hsl(16 38% 44%)",
+                                color: "white",
+                                border: "1px solid hsl(16 38% 44%)",
+                              } : {
+                                background: "hsl(28 38% 97%)",
+                                color: "hsl(20 20% 40%)",
+                                border: "1px solid hsl(25 28% 86%)",
+                              }}
+                            >
+                              ✓ Bəli
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
 

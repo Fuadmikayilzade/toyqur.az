@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { categories as allCategories } from "@/data/mockData";
 
 // Extract logo URL from description metadata
 const extractLogo = (desc: string | null): string => {
@@ -143,6 +144,32 @@ const LazyImage = ({ src, alt, className }: { src: string; alt: string; classNam
   );
 };
 
+// Category display config: emoji + gradient colors
+const CATEGORY_TAG: Record<string, { emoji: string; label: string; from: string; to: string }> = {
+  "wedding-hall":   { emoji: "🏛️", label: "Toy Zalı",      from: "hsl(16 38% 36%)", to: "hsl(20 45% 28%)" },
+  "banquet-hall":   { emoji: "🏰", label: "Banket Zalı",   from: "hsl(16 38% 36%)", to: "hsl(20 45% 28%)" },
+  "photographer":   { emoji: "📸", label: "Fotoqraf",      from: "hsl(213 70% 40%)", to: "hsl(225 60% 32%)" },
+  "videographer":   { emoji: "🎬", label: "Videoqraf",     from: "hsl(213 70% 40%)", to: "hsl(225 60% 32%)" },
+  "mobilograf":     { emoji: "📱", label: "Mobiloqraf",    from: "hsl(213 70% 40%)", to: "hsl(225 60% 32%)" },
+  "cake":           { emoji: "🎂", label: "Tort",           from: "hsl(340 60% 44%)", to: "hsl(355 55% 36%)" },
+  "buket":          { emoji: "💐", label: "Buket",          from: "hsl(142 45% 36%)", to: "hsl(155 40% 28%)" },
+  "gelinlik-buketi":{ emoji: "👰", label: "Gəlinlik Buketi",from: "hsl(320 40% 42%)", to: "hsl(335 35% 34%)" },
+  "xonca":          { emoji: "🧺", label: "Xonça",          from: "hsl(30 55% 38%)", to: "hsl(20 50% 30%)" },
+  "invitation":     { emoji: "💌", label: "Dəvətnamə",     from: "hsl(262 45% 44%)", to: "hsl(275 40% 36%)" },
+  "mc":             { emoji: "🎤", label: "Aparıcı",        from: "hsl(190 55% 36%)", to: "hsl(200 50% 28%)" },
+  "car":            { emoji: "🚗", label: "Toy Maşını",     from: "hsl(220 40% 38%)", to: "hsl(230 35% 30%)" },
+  "decoration":     { emoji: "🎨", label: "Dekor",          from: "hsl(35 55% 38%)", to: "hsl(25 50% 30%)" },
+  "music":          { emoji: "🎵", label: "Canlı Musiqi",   from: "hsl(280 45% 42%)", to: "hsl(290 40% 34%)" },
+  "dress":          { emoji: "👗", label: "Gəlinlik",       from: "hsl(320 40% 42%)", to: "hsl(335 35% 34%)" },
+  "groom-suit":     { emoji: "🤵", label: "Bəy Geyimi",    from: "hsl(220 35% 36%)", to: "hsl(230 30% 28%)" },
+  "dj":             { emoji: "🎧", label: "DJ",             from: "hsl(255 50% 44%)", to: "hsl(265 45% 36%)" },
+  "singer":         { emoji: "🎶", label: "Müğənni",        from: "hsl(280 45% 42%)", to: "hsl(290 40% 34%)" },
+  "dance-group":    { emoji: "💃", label: "Rəqs Qrupu",    from: "hsl(340 55% 42%)", to: "hsl(355 50% 34%)" },
+  "beauty-salon":   { emoji: "💄", label: "Gözəllik",      from: "hsl(340 50% 44%)", to: "hsl(350 45% 36%)" },
+  "bride-assistant":{ emoji: "👗", label: "Gəlin Köməkçisi",from: "hsl(320 40% 42%)", to: "hsl(335 35% 34%)" },
+};
+
+
 const ListingCard = ({ listing }: { listing: Listing }) => {
   const { t } = useLanguage(); 
   const { user } = useAuth();
@@ -221,6 +248,27 @@ const ListingCard = ({ listing }: { listing: Listing }) => {
         >
           <Heart className={`w-4 h-4 ${liked ? "text-primary fill-primary" : "text-foreground/60"}`} />
         </button>
+
+        {/* Category tag — top left */}
+        {listing.category && CATEGORY_TAG[listing.category] && (() => {
+          const tag = CATEGORY_TAG[listing.category];
+          return (
+            <div className="absolute top-3 left-3 z-10">
+              <div
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold shadow-md"
+                style={{
+                  background: `linear-gradient(135deg, ${tag.from} 0%, ${tag.to} 100%)`,
+                  color: "hsl(30 60% 95%)",
+                  backdropFilter: "blur(4px)",
+                  boxShadow: `0 2px 10px ${tag.from}55`,
+                }}
+              >
+                <span>{tag.emoji}</span>
+                <span className="tracking-wide">{tag.label}</span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Price badge */}
         {listing.priceRange && listing.priceRange !== t("askPrice") && (

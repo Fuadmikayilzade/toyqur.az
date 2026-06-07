@@ -48,6 +48,7 @@ const AppRoutes = () => {
         <Route path="*" element={<NotFound />} />
       </Routes>
       <FloatingButtons />
+      {/* <AIChatbot /> */}
     </AuthProvider>
   );
 };

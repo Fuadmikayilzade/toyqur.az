@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { categories } from "@/data/mockData";
+import { CATEGORY_FILTERS, buildFilterMeta, parseFilterMeta, type CategoryFilterField } from "@/data/categoryFilters";
 import { cities, bakuDistricts, isVenueCategory, venueAmenities, cuisineTypes } from "@/data/locations";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -111,6 +112,20 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
   const [capacityMax, setCapacityMax] = useState(parsed.capacityMax ?? "");
   const [menuImages, setMenuImages] = useState<string[]>(parsed.menuImages);
 
+  // Category-specific filters
+  const [filterValues, setFilterValues] = useState<Record<string, string | string[] | boolean>>(() => {
+    return parseFilterMeta(service?.description ?? null, service?.category ?? "");
+  });
+
+  const setFilter = (key: string, value: string | string[] | boolean) =>
+    setFilterValues(prev => ({ ...prev, [key]: value }));
+
+  const toggleMultiFilter = (key: string, val: string) =>
+    setFilterValues(prev => {
+      const arr = (prev[key] as string[]) || [];
+      return { ...prev, [key]: arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val] };
+    });
+
   // Venue checkboxes — restored from saved data
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>(parsed.amenities);
   const [selectedCuisines,  setSelectedCuisines]  = useState<string[]>(parsed.cuisines);
@@ -125,6 +140,10 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
   const [baAge, setBaAge]           = useState("");
   const [baReelsSkill, setBaReelsSkill]     = useState(false);
   const [baMobileContent, setBaMobileContent] = useState(false);
+
+  // Reset filters when category changes
+  const prevCat = form.category;
+  const currentFilters = CATEGORY_FILTERS[form.category] || [];
 
   const isVenue   = isVenueCategory(form.category);
   const isBa      = isBrideAssistant(form.category);
@@ -211,6 +230,10 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
     if (isBa) {
       description = `Ad Soyad: ${baFullName}\nYaş: ${baAge}\nReels düzəltmə: ${baReelsSkill ? "Bəli" : "Xeyr"}\nMobil kontent: ${baMobileContent ? "Bəli" : "Xeyr"}\n\n${description}`;
     }
+
+    // Build category filter meta
+    const filterMeta = buildFilterMeta(form.category, filterValues);
+    if (filterMeta) description += "\n" + filterMeta;
 
     // Build meta block — amenities/cuisines saved with || separator
     const meta: string[] = [`\n---\nƏlaqə 1: ${phone1}`];
@@ -618,6 +641,94 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
               </div>
             </div>
           </>
+        )}
+
+
+        {/* ── Kateqoriya Filtrləri ── */}
+        {currentFilters.length > 0 && (
+          <div className="rounded-xl p-5 space-y-4" style={sectionStyle}>
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              🔍 Kateqoriya Filtrləri
+              <span className="text-xs font-normal text-muted-foreground">(müştərilərin daha asan tapması üçün)</span>
+            </h3>
+            {currentFilters.map(field => (
+              <div key={field.key}>
+                <label className="text-sm font-medium text-foreground mb-1.5 block">{field.label}</label>
+
+                {field.type === "select" && (
+                  <div className="relative">
+                    <select
+                      value={(filterValues[field.key] as string) || ""}
+                      onChange={e => setFilter(field.key, e.target.value)}
+                      className={`${inputCls} appearance-none`}
+                      style={inputStyle}
+                    >
+                      <option value="">Seçin</option>
+                      {field.options?.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  </div>
+                )}
+
+                {field.type === "multiselect" && (
+                  <div className="flex flex-wrap gap-2">
+                    {field.options?.map(opt => {
+                      const arr = (filterValues[field.key] as string[]) || [];
+                      const active = arr.includes(opt.value);
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => toggleMultiFilter(field.key, opt.value)}
+                          className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                          style={active ? {
+                            background: "hsl(16 38% 44%)",
+                            color: "white",
+                            border: "1px solid hsl(16 38% 44%)",
+                          } : {
+                            background: "hsl(28 38% 97%)",
+                            color: "hsl(20 20% 40%)",
+                            border: "1px solid hsl(25 28% 86%)",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {field.type === "boolean" && (
+                  <div className="flex gap-3">
+                    {["bəli", "xeyr"].map(val => {
+                      const active = val === "bəli" ? filterValues[field.key] === true : filterValues[field.key] === false;
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setFilter(field.key, val === "bəli" ? true : false)}
+                          className="px-4 py-2 rounded-xl text-sm font-medium transition-all capitalize"
+                          style={active ? {
+                            background: "hsl(16 38% 44%)",
+                            color: "white",
+                            border: "1px solid hsl(16 38% 44%)",
+                          } : {
+                            background: "hsl(28 38% 97%)",
+                            color: "hsl(20 20% 40%)",
+                            border: "1px solid hsl(25 28% 86%)",
+                          }}
+                        >
+                          {val === "bəli" ? "✓ Bəli" : "✗ Xeyr"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
 
         {/* ── Menyu şəkilləri — yalnız toy/banket zalları üçün ── */}
