@@ -231,11 +231,10 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
       description = `Ad Soyad: ${baFullName}\nYaş: ${baAge}\nReels düzəltmə: ${baReelsSkill ? "Bəli" : "Xeyr"}\nMobil kontent: ${baMobileContent ? "Bəli" : "Xeyr"}\n\n${description}`;
     }
 
-    // Build category filter meta
-    const filterMeta = buildFilterMeta(form.category, filterValues);
-    if (filterMeta) description += "\n" + filterMeta;
-
     // Build meta block — amenities/cuisines saved with || separator
+    // Build category filter meta — goes AFTER --- separator
+    const filterMeta = buildFilterMeta(form.category, filterValues);
+
     const meta: string[] = [`\n---\nƏlaqə 1: ${phone1}`];
     if (phone2)     meta.push(`Əlaqə 2: ${phone2}`);
     meta.push(`WhatsApp: ${whatsapp}`);
@@ -248,6 +247,7 @@ const ServiceForm = ({ service, onClose, onSaved }: ServiceFormProps) => {
     if (selectedAmenities.length) meta.push(`Xidmətlər: ${selectedAmenities.join(" || ")}`);
     if (selectedCuisines.length)  meta.push(`Mətbəx: ${selectedCuisines.join(" || ")}`);
     if (menuImages.length) meta.push(`MenuImages: ${menuImages.join(" || ")}`);
+    if (filterMeta) meta.push(filterMeta);
     description += meta.join("\n");
 
     const payload = {
